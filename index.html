@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Eine schmale Spalte fürs Handy: Termin oben, dann die eigene Bestellung, dann die Liste aller und die Kontostände. */
+:root {
+  --bg: #f3f6fa;
+  --surface: #ffffff;
+  --line: #d9e1ec;
+  --ink: #15233a;
+  --muted: #5b6b82;
+  --blue: #1660b0;        /* Rautenblau */
+  --blue-soft: #e4eef9;
+  --senf: #a8741c;        /* süßer Senf */
+  --senf-soft: #f8edd8;
+  --ok: #1d7a46;
+  --ok-soft: #e1f2e8;
+  --bad: #b3261e;
+  --bad-soft: #fbe6e4;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1520; --surface: #172131; --line: #29364a; --ink: #e7edf6; --muted: #9aa9bf;
+    --blue: #6aa8ec; --blue-soft: #18304d; --senf: #e0aa4f; --senf-soft: #3a2b12;
+    --ok: #4cc785; --ok-soft: #153022; --bad: #f08a80; --bad-soft: #3b1a17;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+#app { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+/* Breiter Bildschirm: Kalender und Aufladen rechts in einer schmalen Spalte. */
+@media (min-width: 980px) {
+  body .wrap { max-width: 1140px; }
+  #app:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto 1fr; gap: 18px 22px; align-items: start; }
+  #app > .col:first-child { grid-column: 1; grid-row: 1; }
+  #app > .side { grid-column: 2; grid-row: 1 / 3; position: sticky; top: 16px; }
+  #app > .col:last-child { grid-column: 1; grid-row: 2; }
+}
+.pay { display: flex; flex-direction: column; gap: 8px; font-size: .92rem; }
+.pay .f { display: flex; flex-direction: column; gap: 1px; }
+.pay .f span { color: var(--muted); font-size: .8rem; }
+.pay .f div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pay code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9rem; word-break: break-all; }
+.pay a.primary { text-align: center; text-decoration: none; }
+/* Auf- und zuklappbare Karten (Verwaltung, Kontostände): standardmäßig zu, das Gerät merkt sich den Zustand. */
+details.fold > summary { list-style: none; cursor: pointer; border-radius: 8px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary h2::after { content: "▸"; font-size: 1rem; color: var(--muted); margin-left: auto; transition: transform .15s; }
+details.fold[open] > summary h2::after { transform: rotate(90deg); }
+details.fold > summary h2 { justify-content: flex-start; }
+.foldbody { display: flex; flex-direction: column; gap: 12px; padding-top: 12px; }
+details.sub > summary { cursor: pointer; color: var(--blue); font-size: .92rem; padding: 2px 0; }
+details.sub[open] { display: flex; flex-direction: column; gap: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.tile2 { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 1px; font-variant-numeric: tabular-nums; }
+.tile2 span { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.tile2 b { font-family: var(--display); font-size: 1.4rem; }
+.tile2 small { font-size: .78rem; color: var(--muted); }
+.tile2.pos b { color: var(--ok); } .tile2.neg b { color: var(--bad); }
+textarea { font: .88rem ui-monospace, Consolas, monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; width: 100%; resize: vertical; }
+.qr { display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 4px; }
+.qr .code { background: #fff; padding: 8px; border-radius: 10px; border: 1px solid var(--line); line-height: 0; }
+.qr .code svg { width: 180px; height: 180px; }
+.qr .amt { display: flex; align-items: center; gap: 6px; font-size: .9rem; }
+.qr .amt input { width: 7em; padding: 6px 8px; }
+.wrap > *, #app > * { min-width: 0; max-width: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45; }
+.wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; display: flex; flex-direction: column; gap: 18px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1.1; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 600; font-size: 1.3rem; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+h2 small { font-family: var(--body); font-size: .9rem; color: var(--muted); font-weight: 500; }
+/* Bayerische Rauten weiß-blau */
+/* Kopfteil: bayerische Rauten (schmal und hoch) als Hintergrund, darauf ein weißes Schild mit Logo und Titel */
+.kopf { border-radius: 16px; padding: 22px 20px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='32'%3E%3Crect width='16' height='32' fill='%23fff'/%3E%3Cpath d='M8 0L16 16L8 32L0 16Z' fill='%23bcd6f0'/%3E%3C/svg%3E") repeat center / 16px 32px; border: 1px solid #bcd6f0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.event { display: flex; flex-direction: column; gap: 6px; }
+.event .when { font-family: var(--display); font-size: 1.6rem; font-weight: 600; line-height: 1.15; }
+.pill { display: inline-flex; align-items: center; gap: 6px; width: fit-content; border-radius: 99px; padding: 3px 12px; font-size: .9rem; font-weight: 600; }
+.pill.open { background: var(--ok-soft); color: var(--ok); }
+.pill.locked { background: var(--senf-soft); color: var(--senf); }
+.pill.off { background: var(--bad-soft); color: var(--bad); }
+.brand { display: flex; align-items: center; gap: 14px; width: fit-content; max-width: 100%; background: #fff; color: #15233a; border-radius: 14px; padding: 10px 22px 10px 12px; box-shadow: 0 2px 10px rgba(10, 60, 120, .25); }
+.brand .logo { width: 60px; height: 60px; flex: none; }
+.brand h1 { font-size: 2.4rem; }
+@media (max-width: 420px) { .kopf { padding: 14px 12px; } .brand { padding: 8px 14px 8px 8px; gap: 10px; } .brand .logo { width: 46px; height: 46px; } .brand h1 { font-size: 1.6rem; } }
+.hero { --c: var(--ok); --cs: var(--ok-soft); display: flex; align-items: center; gap: 16px; background: var(--surface); border: 1px solid var(--line); border-left: 6px solid var(--c); border-radius: 14px; padding: 14px 16px; margin-top: 4px; }
+.hero.locked, .hero.run { --c: var(--senf); --cs: var(--senf-soft); }
+.hero .tile { flex: none; width: 76px; border-radius: 12px; overflow: hidden; text-align: center; background: var(--cs); color: var(--c); display: flex; flex-direction: column; font-family: var(--display); line-height: 1.05; }
+.hero .tile span:first-child { background: var(--c); color: #fff; font-size: .9rem; font-weight: 600; padding: 3px 0; text-transform: uppercase; letter-spacing: .06em; }
+.hero .tile b { font-size: 2.3rem; font-weight: 700; padding-top: 4px; }
+.hero .tile span:last-child { font-size: .9rem; font-weight: 600; padding-bottom: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.hero .heroinfo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hero .kicker { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.hero .when { font-family: var(--display); font-size: 1.55rem; font-weight: 700; line-height: 1.1; }
+.hero .status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--c); font-weight: 600; font-size: .95rem; }
+.hero .status .ic { width: 14px; height: 14px; flex: none; }
+.hero .status b { background: var(--cs); border-radius: 99px; padding: 1px 10px; }
+.hero { flex-wrap: wrap; }
+.hero .heroinfo { flex: 1 1 260px; }
+.hero .nextchips { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; margin-left: auto; }
+.hero .chiprow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.hero .nchip { background: var(--blue-soft); color: var(--blue); border-radius: 8px; padding: 3px 10px; font-size: .88rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hero .nchip.off { background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+@media (max-width: 700px) { .hero .nextchips { width: 100%; align-items: flex-start; margin-left: 0; padding-top: 10px; border-top: 1px solid var(--line); } .hero .chiprow { justify-content: flex-start; } }
+@media (max-width: 420px) { .hero { gap: 12px; padding: 12px; } .hero .tile { width: 64px; } .hero .tile b { font-size: 1.9rem; } .hero .when { font-size: 1.3rem; } }
+.next { color: var(--muted); font-size: .9rem; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.next s { color: var(--bad); }
+label { font-weight: 600; font-size: .95rem; }
+select, input { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; width: 100%; min-width: 0; }
+button { font: inherit; cursor: pointer; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.primary { background: var(--blue); color: #fff; border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 600; }
+.primary:disabled { opacity: .45; cursor: default; }
+.primary.done:disabled { opacity: 1; background: var(--ok-soft); color: var(--ok); }
+.link { background: none; border: 0; color: var(--blue); padding: 2px 0; font-size: .92rem; width: fit-content; text-align: left; }
+.small { background: var(--bg); border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 5px 10px; font-size: .88rem; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > input, .row > select { flex: 1 1 160px; width: auto; }
+.items { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.item .nm { font-weight: 500; }
+.item .pr { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.ico { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 1px; }
+.ico svg { width: 22px; height: 22px; }
+.ico.s svg { width: 16px; height: 16px; }
+.ico em { font-style: normal; font-size: .8rem; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.combo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-left: 8px; vertical-align: middle; }
+.whohead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.newbtn { color: var(--blue); border-color: var(--blue); background: var(--blue-soft); font-weight: 600; }
+#repeat { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.link.danger { color: var(--bad); align-self: center; }
+.req { margin: 0; border-radius: 10px; padding: 8px 12px; background: var(--senf-soft); color: var(--ink); font-size: .92rem; }
+.rq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--senf); border-radius: 10px; background: var(--senf-soft); }
+.rq .who { font-weight: 600; min-width: 9em; }
+.rq .chg { flex: 1 1 16em; font-size: .9rem; }
+.step { display: flex; align-items: center; gap: 4px; }
+.step button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 1.3rem; line-height: 1; }
+.step button:disabled { opacity: .35; cursor: default; }
+.step output { min-width: 2.2ch; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.15rem; }
+.item.has .nm { color: var(--blue); }
+.sum { display: flex; justify-content: space-between; font-weight: 600; font-variant-numeric: tabular-nums; }
+.msg { min-height: 1.3em; font-size: .92rem; color: var(--muted); margin: 0; }
+.msg.ok { color: var(--ok); } .msg.err { color: var(--bad); }
+.bal { border-radius: 10px; padding: 10px 12px; background: var(--blue-soft); display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+.neg { color: var(--bad); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--senf-soft); color: var(--senf); border-radius: 8px; padding: 3px 9px; font-weight: 600; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 9rem; }
+th { font-weight: 600; color: var(--muted); font-size: .8rem; vertical-align: bottom; }
+tfoot td { font-weight: 700; border-bottom: 0; }
+tr.me td { background: var(--blue-soft); }
+tr.inactive td { color: var(--muted); }
+.hist { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
+.hist div { display: grid; grid-template-columns: 6.5em 1fr auto; gap: 8px; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); font-size: .9rem; margin: 0; }
+.adm { border-color: var(--senf); }
+.ev { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ev b { min-width: 9.5em; }
+.ev input[type=date] { width: auto; padding: 5px 8px; }
+.calhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.calhead b { font-family: var(--display); font-size: 1.25rem; font-weight: 600; }
+.calhead button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 1.2rem; line-height: 1; }
+.calhead button:disabled { opacity: .3; cursor: default; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; font-variant-numeric: tabular-nums; }
+.cal .wd { font-size: .78rem; font-weight: 600; color: var(--muted); padding-bottom: 2px; }
+.cal .d { height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: .88rem; position: relative; }
+.cal .d.out { visibility: hidden; }
+.cal .d.today { outline: 2px solid var(--line); outline-offset: -2px; font-weight: 700; }
+.cal .d.wwf { background: var(--blue); color: #fff; font-weight: 700; }
+.cal .d.wwf.past { background: var(--blue-soft); color: var(--blue); }
+.cal .d.wwf.cur { background: var(--ok); color: #fff; }
+.cal .d.wwf.cur.closed { background: var(--senf); }
+.cal .d.wwf.off { background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+.cal .d.lock { border: 1.5px dashed var(--senf); }
+.lk { position: absolute; top: 2px; right: 3px; width: 10px; height: 10px; color: var(--senf); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 20px; height: 20px; border-radius: 6px; position: relative; flex: none; }
+.sw.cur { background: var(--ok); } .sw.cur.closed { background: var(--senf); } .sw.plan { background: var(--blue); } .sw.past { background: var(--blue-soft); }
+.sw.off { background: var(--bad-soft); } .sw.today { outline: 2px solid var(--line); outline-offset: -2px; }
+.sw.lock { border: 1.5px dashed var(--senf); }
+.calList { display: flex; flex-direction: column; border-top: 1px solid var(--line); font-size: .92rem; }
+.calList div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.calList .off { color: var(--bad); }
+#pinBox { max-width: 420px; }
+footer { display: flex; justify-content: center; }
+@media (prefers-reduced-motion: no-preference) { .flash { animation: fl .6s ease; } @keyframes fl { from { background: var(--ok-soft); } } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="event" id="head">
+    <div class="kopf"><div class="brand">
+      <!-- Logo im Stil des Betty-Symbols: Maßkrug mit den Lehrstuhl-Elektroden (+/−), dahinter groß Brezn und Weißwurst -->
+      <svg class="logo" viewBox="0 0 128 128" aria-hidden="true">
+  <defs><clipPath id="wwflc"><rect width="128" height="128" rx="28"/></clipPath></defs>
+  <rect width="128" height="128" rx="28" fill="#0A6DB9"/>
+  <g clip-path="url(#wwflc)">
+    <!-- Hintergrund: große Brezn links oben, Weißwurst schräg rechts oben -->
+    <g fill="none" stroke="#2E7DC6" stroke-width="3.3" stroke-linecap="round" transform="translate(0 -2) scale(2.75)">
+      <path d="M3,13 C1,22 7,27 12.5,27 C18,27 24,22 22,13"/>
+      <path d="M3,13 C3,4 10,2 12.5,9 C15,2 22,4 22,13"/>
+      <path d="M12.5,9 C11,15 8,19 6,24 M12.5,9 C14,15 17,19 19,24"/>
+    </g>
+    <g transform="translate(-9 9) rotate(-28 98 28)">
+      <rect x="70" y="17" width="56" height="22" rx="11" fill="#2E7DC6"/>
+      <path d="M70,28 L63,26 M126,28 L133,30" stroke="#2E7DC6" stroke-width="4" stroke-linecap="round"/>
+    </g>
+  </g>
+  <!-- Vordergrund: Maßkrug mit Lehrstuhl-Elektroden -->
+  <g transform="translate(26 36) scale(0.72)">
+    <path d="M3,44 L3,12 L13,12 M37,12 L62,12 M86,12 L97,12 L97,40" fill="none" stroke="#fff" stroke-width="6"/>
+    <path d="M98,54 L106,54 C121,54 121,92 106,92 L98,92" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+    <path d="M0,46 C4,38 11,38 15,43 C19,36 28,36 32,43 C37,37 45,37 49,44 C53,37 62,37 66,43 C70,36 79,36 83,43 C87,38 95,38 100,46 L100,98 C100,104 96,108 90,108 L10,108 C4,108 0,104 0,98 Z" fill="#fff"/>
+    <path d="M6,100 L94,100" stroke="#9CC4EA" stroke-width="3"/>
+    <path d="M15,12 C15,0 36,0 36,12 L36,42 L15,42 Z" fill="#9CC4EA"/>
+    <path d="M15,41 C22,39 30,40 36,42 L36,82 C36,94 15,94 15,82 Z" fill="#0A6DB9"/>
+    <path d="M63,14 C63,2 84,2 84,14 L84,47 L63,47 Z" fill="#9CC4EA"/>
+    <path d="M63,46 C70,45 78,44 84,43 L84,82 C84,94 63,94 63,82 Z" fill="#0A6DB9"/>
+    <path d="M18.5,19 L32.5,19 L32.5,23 L18.5,23 Z M23.5,14 L27.5,14 L27.5,28 L23.5,28 Z" fill="#0A6DB9"/>
+    <path d="M66.5,22 L80.5,22 L80.5,26 L66.5,26 Z" fill="#0A6DB9"/>
+  </g>
+</svg>
+      <h1 id="title">Weißwurstfrühstück</h1>
+    </div></div>
+    <div id="eventBox"><p class="muted">Lade …</p></div>
+  </header>
+
+  <section class="card" id="pinBox" hidden>
+    <h2>Lehrstuhl-PIN</h2>
+    <p class="muted">Den PIN gibt's beim KMLK bzw. bei Franz. Er bleibt auf diesem Gerät gespeichert.</p>
+    <form id="pinForm" class="row">
+      <input id="pin" type="password" autocomplete="current-password" inputmode="text" aria-label="PIN">
+      <button class="primary" type="submit">Weiter</button>
+    </form>
+    <p class="msg err" id="pinMsg"></p>
+  </section>
+
+  <main id="app" hidden>
+    <div class="col">
+    <section class="card" id="orderCard">
+      <h2>Deine Bestellung</h2>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="whohead">
+          <label for="who">Wer bist du?</label>
+          <button class="small newbtn" id="newToggle" type="button">＋ Name fehlt? Neu anlegen</button>
+        </div>
+        <select id="who"></select>
+        <form id="newBox" class="row" hidden>
+          <input id="newName" placeholder="Nachname, Vorname" aria-label="Neuer Name" autocomplete="name">
+          <button class="small" type="submit">Anlegen</button>
+        </form>
+      </div>
+      <button class="small" id="repeat" type="button" hidden style="align-self:flex-start"></button>
+      <div class="items" id="items"></div>
+      <div class="sum"><span>Summe</span><span id="orderSum">0,00 €</span></div>
+      <button class="primary" id="save" type="button" disabled>Eintragen</button>
+      <button class="link danger" id="leave" type="button" hidden>Austragen</button>
+      <p class="req" id="reqNote" hidden></p>
+      <p class="msg" id="saveMsg" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <h2>Angemeldet <small id="cnt"></small></h2>
+      <div class="chips" id="shop"></div>
+      <div class="tablewrap"><table id="list"></table></div>
+    </section>
+
+    </div>
+    <aside class="col side">
+    <section class="card" id="calCard" aria-label="Kalender">
+      <div class="calhead">
+        <button type="button" id="calPrev" aria-label="Vorheriger Monat">‹</button>
+        <b id="calTitle" aria-live="polite"></b>
+        <button type="button" id="calNext" aria-label="Nächster Monat">›</button>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div class="legend" id="calLegend"></div>
+      <div class="calList" id="calList"></div>
+    </section>
+
+    <section class="card" id="meCard">
+      <h2>Dein Konto</h2>
+      <p class="muted" id="meEmpty">Oben deinen Namen wählen.</p>
+      <div class="bal" id="balBox" hidden></div>
+      <button class="link" id="histBtn" type="button" hidden>Verlauf anzeigen</button>
+      <div class="hist" id="hist" hidden></div>
+    </section>
+
+    <section class="card" id="payCard">
+      <h2>Aufladen</h2>
+      <p class="muted" id="hint"></p>
+      <div class="pay" id="payBox"></div>
+      <p class="msg" id="payMsg" aria-live="polite"></p>
+    </section>
+    </aside>
+
+    <div class="col">
+    <section class="card adm" id="admin" hidden>
+      <details class="fold" data-fold="admin">
+      <summary><h2>Verwaltung <small id="admSub">Aufladen, Kasse, Einkauf, Termine, Kontostände</small></h2></summary>
+      <div class="foldbody">
+      <div style="display:flex;flex-direction:column;gap:6px" id="rqBox" hidden>
+        <label>Anträge nach der Sperre</label>
+        <div id="rqList" style="display:flex;flex-direction:column;gap:6px"></div>
+        <p class="msg" id="rqMsg" aria-live="polite"></p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <label for="tuWho">Aufladung buchen</label>
+        <form id="tuForm" class="row">
+          <select id="tuWho" aria-label="Person"></select>
+          <input id="tuAmount" inputmode="decimal" placeholder="Betrag, z. B. 20" aria-label="Betrag in Euro" style="flex:0 1 9em">
+          <select id="tuVia" aria-label="Wie bezahlt" style="flex:0 1 10em"><option value="bar">bar</option><option value="konto">Überweisung</option></select>
+          <input id="tuNote" placeholder="Notiz (freiwillig)" aria-label="Notiz">
+          <button class="small" type="submit">Buchen</button>
+        </form>
+        <p class="msg" id="tuMsg" aria-live="polite"></p>
+        <div class="hist" id="tuList"></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label>Kasse</label>
+        <div class="tiles" id="kaTiles"></div>
+        <p class="muted" id="kaHint"></p>
+        <form id="kaForm" class="row">
+          <input id="kaBar" inputmode="decimal" placeholder="Bar gezählt, z. B. 143,50" aria-label="Bargeld gezählt in Euro">
+          <input id="kaKonto" inputmode="decimal" placeholder="Revolut-Konto (freiwillig)" aria-label="Kontostand Revolut in Euro">
+          <input id="kaNote" placeholder="Notiz (freiwillig)" aria-label="Notiz" style="flex:0 1 10em">
+          <button class="small" type="submit">Kassenstand eintragen</button>
+        </form>
+        <p class="msg" id="kaMsg" aria-live="polite"></p>
+        <div class="tablewrap"><table id="kaTable"></table></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label for="rbGroup">Rechnung hinterlegen</label>
+        <form id="rbForm" class="row">
+          <select id="rbGroup" aria-label="Wofür" style="flex:1 1 11em"><option value="">– Wofür? –</option><option value="wurst">Weißwürste</option><option value="brezn">Brezen und Dips</option><option value="bier">Weißbier</option><option value="sonstiges">Sonstiges</option></select>
+          <input id="rbAmount" inputmode="decimal" placeholder="Betrag, z. B. 48,90" aria-label="Rechnungsbetrag in Euro" style="flex:0 1 9em">
+          <input id="rbDay" type="date" aria-label="Datum der Rechnung" style="flex:0 1 10em">
+          <input id="rbShop" placeholder="Geschäft / Notiz" aria-label="Geschäft oder Notiz">
+          <select id="rbPayer" aria-label="Wer hat bezahlt" style="flex:1 1 14em"></select>
+          <select id="rbRefund" aria-label="Erstattung" style="flex:1 1 14em" hidden>
+            <option value="credit">aufs WWF-Konto gutschreiben</option><option value="bar">bar aus der Kasse auszahlen</option><option value="konto">per Überweisung auszahlen</option>
+          </select>
+          <button class="small" type="submit">Rechnung speichern</button>
+        </form>
+        <p class="msg" id="rbMsg" aria-live="polite"></p>
+        <div class="hist" id="rbList"></div>
+        <details class="sub">
+          <summary>Rechnung als Foto an Claude: Zeilen hier einfügen</summary>
+          <p class="muted">Claude liest die Rechnung aus und legt die Zeilen in die Zwischenablage. Hier einfügen und „Einkauf buchen“. Der WWF wird selbst zugeordnet.</p>
+          <textarea id="ekText" rows="3" placeholder="Datum⇥Händler⇥Artikel⇥Menge⇥Betrag⇥Notiz⇥bar/Konto" aria-label="Rechnungszeilen"></textarea>
+          <div class="row"><button class="small" type="button" id="ekBtn">Einkauf buchen</button><span class="msg" id="ekMsg" aria-live="polite"></span></div>
+        </details>
+        <label style="padding-top:6px">Einnahmen gegen Einkauf</label>
+        <div class="tablewrap"><table id="ekTable"></table></div>
+        <div class="row" id="ekPick" hidden><label for="ekSel" style="font-weight:500">Je Warengruppe für</label><select id="ekSel" style="flex:0 1 14em"></select></div>
+        <div class="tablewrap"><table id="ekArts"></table></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label>Termine</label>
+        <p class="muted">Alle vier Wochen entsteht ein Termin von selbst. Hier lässt du einen ausfallen, verschiebst ihn oder legst einen zusätzlichen an.</p>
+        <div id="evList"></div>
+        <form id="extraForm" class="row" style="padding-top:8px">
+          <input id="extraDay" type="date" aria-label="Datum zusätzlicher Termin" style="flex:0 1 12em">
+          <button class="small" type="submit">Zusätzlichen Termin anlegen</button>
+        </form>
+        <p class="msg" id="evMsg" aria-live="polite"></p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px" id="balCard">
+        <label>Kontostände</label>
+        <p class="muted">„ausblenden“ nimmt jemanden aus der Namensliste. Kontostand und Verlauf bleiben erhalten.</p>
+        <p class="msg" id="balMsg" aria-live="polite"></p>
+        <div class="tablewrap"><table id="balances"></table></div>
+      </div>
+      <p class="muted">Preise, Namen und Startstände änderst du direkt in der Google-Tabelle (Blätter „Artikel“ und „Personen“). Eine Preisänderung ist eine neue Zeile mit „Gültig ab“.</p>
+      </div>
+      </details>
+    </section>
+
+    <footer><button class="link" id="logout" type="button">PIN wechseln</button></footer>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+const TZ = 'Europe/Berlin';
+const $ = id => document.getElementById(id);
+let S = null, PIN = '', ME = '', draft = {}, dirty = false, busy = false;
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k) || ''; if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return ''; } }
+// In Apps Script direkt über google.script.run; auf GitHub Pages ohne Google-Anmeldung über den POST-Eingang des Skripts
+// (so stören mehrere Google-Konten im Browser nicht).
+const API_URL = 'https://script.google.com/macros/s/AKfycbzXSS42Xk1iUtTLm-rcs36fvgQ5HomxHzp5vWDXqgLoelhph04u6-Han4DdyTkYZWI/exec';
+function call(fn, ...args) {
+  if (window.google && google.script && google.script.run)
+    return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+  return fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn, args }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, credentials: 'omit', redirect: 'follow' })
+    .then(r => { if (!r.ok) throw new Error('Server nicht erreichbar (' + r.status + '). Bitte gleich nochmal.'); return r.json(); })
+    .then(j => { if (j.error) throw new Error(j.error); return j.ok; });
+}
+function errText(e) { const m = (e && e.message) || String(e); return m.replace(/^(Error:\s*)?PIN\|/, ''); }
+function isPinErr(e) { return /(^|\s)PIN\|/.test((e && e.message) || String(e)); }
+const eur = n => (Math.round(n * 100) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+const fmt = (ms, o) => new Date(ms).toLocaleString('de-DE', Object.assign({ timeZone: TZ }, o));
+const dayFmt = d => { const p = d.split('-'); return p[2] + '.' + p[1] + '.'; };
+function el(tag, attrs, ...kids) {
+  const n = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => { if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v); });
+  kids.flat().forEach(k => n.append(k instanceof Node ? k : document.createTextNode(k == null ? '' : String(k))));
+  return n;
+}
+
+/* ---------- Laden ---------- */
+async function load(quiet) {
+  if (!PIN) return showPin('');
+  try {
+    apply(await call('getState', PIN));
+  } catch (e) {
+    if (isPinErr(e)) return showPin(errText(e));
+    if (!quiet) $('eventBox').replaceChildren(el('p', { class: 'msg err' }, 'Konnte nicht laden: ' + errText(e)));
+  }
+}
+function showPin(msg) {
+  $('app').hidden = true; $('pinBox').hidden = false; $('pinMsg').textContent = msg || '';
+  $('eventBox').replaceChildren(); $('pin').focus();
+}
+$('pinForm').addEventListener('submit', e => { e.preventDefault(); PIN = $('pin').value.trim(); store('wwf-pin', PIN); $('pinMsg').textContent = ''; load(); });
+$('logout').addEventListener('click', () => { PIN = ''; store('wwf-pin', null); $('pin').value = ''; showPin(''); });
+
+function apply(state) {
+  S = state;
+  $('pinBox').hidden = true; $('app').hidden = false;
+  document.title = S.title; $('title').textContent = S.title;
+  $('hint').textContent = S.hint || '';
+  if (!S.people.some(p => p.id === ME)) ME = '';
+  if (!dirty) draft = Object.assign({}, (mePerson() || {}).items || {});
+  renderEvent(); renderWho(); renderItems(); renderMe(); renderList(); renderCal(); renderPay(); renderBalances(); renderAdmin();
+}
+
+/* ---------- Aufladen (Revolut-Konto aus „Einstellungen“) ---------- */
+function renderPay() {
+  const p = S.pay || {}, box = $('payBox');
+  if (!p.iban) { box.replaceChildren(); return; }
+  const me = mePerson();
+  const purpose = (p.purpose || 'WWF {Name}').replace('{Name}', me ? me.name : 'dein Name');
+  const field = (label, value, copy) => el('div', { class: 'f' }, el('span', {}, label),
+    el('div', {}, el('code', {}, value), copy ? el('button', { class: 'small', type: 'button', onclick: () => copyText(value, label) }, 'Kopieren') : ''));
+  box.replaceChildren(
+    p.owner ? field('Empfänger', p.owner, false) : '',
+    field('IBAN', p.iban, true),
+    p.bic ? field('BIC', p.bic, true) : '',
+    field('Verwendungszweck', purpose, !!me),
+    me ? '' : el('p', { class: 'muted' }, 'Oben deinen Namen wählen, dann steht er hier im Verwendungszweck.'),
+    qrBox(p, purpose, !!me),
+    p.link ? el('a', { class: 'primary', href: p.link, target: '_blank', rel: 'noopener' }, 'Mit Revolut zahlen') : '');
+}
+// GiroCode (EPC-QR): Banking-Apps füllen damit Empfänger, IBAN, Betrag und Verwendungszweck aus.
+let qrAmount = '';
+function epcPayload(p, purpose, amount) {
+  const a = Math.round(parseFloat(String(amount).replace(',', '.')) * 100) / 100;
+  return ['BCD', '002', '1', 'SCT', (p.bic || '').replace(/\s+/g, ''), (p.owner || '').slice(0, 70),
+    p.iban.replace(/\s+/g, '').toUpperCase(), a > 0 && a <= 999 ? 'EUR' + a.toFixed(2) : '', '', '', purpose.slice(0, 140)].join('\n');
+}
+function qrSvg(text) {
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  const q = qrcode(0, 'M'); q.addData(text, 'Byte'); q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+}
+function qrBox(p, purpose, named) {
+  if (!p.owner || typeof qrcode !== 'function') return '';
+  if (!named) return el('p', { class: 'muted' }, 'Mit Namen oben gibt es hier einen QR-Code für die Fotoüberweisung.');
+  const code = el('div', { class: 'code', role: 'img', 'aria-label': 'GiroCode für die Überweisung' });
+  const draw = () => { try { code.innerHTML = qrSvg(epcPayload(p, purpose, qrAmount)); } catch (e) { code.replaceChildren(); } };
+  const amt = el('input', { inputmode: 'decimal', placeholder: 'z. B. 20', 'aria-label': 'Betrag in Euro für den QR-Code', value: qrAmount });
+  amt.addEventListener('input', () => { qrAmount = amt.value; draw(); });
+  draw();
+  return el('div', { class: 'qr' }, code,
+    el('div', { class: 'amt' }, el('span', {}, 'Betrag vormerken'), amt, el('span', {}, '€')),
+    el('p', { class: 'muted', style: 'text-align:center' }, 'In der Banking-App „Fotoüberweisung“ bzw. „QR-Code scannen“ wählen und den Code abfotografieren.'));
+}
+async function copyText(t, label) {
+  const m = $('payMsg');
+  try { await navigator.clipboard.writeText(t); }
+  catch (e) {
+    const ta = el('textarea', { style: 'position:fixed;opacity:0' }); ta.value = t; document.body.append(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e2) {}
+    ta.remove();
+    if (!ok) { m.className = 'msg err'; m.textContent = 'Kopieren ging nicht, bitte von Hand abschreiben.'; return; }
+  }
+  m.className = 'msg ok'; m.textContent = label + ' kopiert.';
+}
+const mePerson = () => S && S.people.find(p => p.id === ME);
+const editable = () => S.event && (S.role === 'admin' || S.now < S.event.start + 3 * 3600e3);   // nach der Sperre als Antrag
+
+/* ---------- Termin ---------- */
+// Termin-Block oben: Kalenderblatt links, Uhrzeit und „Eintragen bis“ rechts; Farbe nach Zustand.
+function renderEvent() {
+  const box = $('eventBox'); box.replaceChildren();
+  const e = S.event;
+  if (!e) { box.append(el('div', { class: 'hero' }, el('div', { class: 'heroinfo' }, el('div', { class: 'kicker' }, 'Nächstes WWF'), el('div', { class: 'when' }, 'Noch kein Termin geplant')))); return; }
+  const hm = fmt(e.start, { hour: '2-digit', minute: '2-digit' });
+  let state, line;
+  if (S.now >= e.start) { state = 'run'; line = 'Läuft gerade · Guten Appetit!'; }
+  else if (e.locked) { state = 'locked'; line = 'Liste gesperrt · Einkaufsliste steht'; }
+  else { state = 'open'; line = 'Eintragen bis ' + fmt(e.lock, { weekday: 'short', day: '2-digit', month: '2-digit' }) + ', ' + fmt(e.lock, { hour: '2-digit', minute: '2-digit' }) + ' Uhr'; }
+  const status = el('div', { class: 'status' });
+  status.insertAdjacentHTML('beforeend', LOCK_SVG.replace('class="lk"', 'class="ic"'));
+  status.append(el('span', {}, line), state === 'open' ? el('b', {}, left(e.lock - S.now)) : '');
+  box.append(el('div', { class: 'hero ' + state },
+    el('div', { class: 'tile', 'aria-hidden': 'true' },
+      el('span', {}, fmt(e.start, { weekday: 'short' }).replace('.', '')),
+      el('b', {}, fmt(e.start, { day: 'numeric' })),
+      el('span', {}, fmt(e.start, { month: 'short' }).replace('.', ''))),
+    el('div', { class: 'heroinfo' },
+      el('div', { class: 'kicker' }, 'Nächstes WWF'),
+      el('div', { class: 'when' }, fmt(e.start, { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + hm + ' Uhr'),
+      status,
+      e.moved || e.note ? el('div', { class: 'muted' }, [e.moved ? 'Verschoben vom ' + dayFmt(e.key) + '.' : '', e.note].filter(Boolean).join(' ')) : ''),
+    nextChips(e)));
+}
+// Die folgenden Termine als kleine Labels im Termin-Block (ausgefallene rot und durchgestrichen).
+function nextChips(e) {
+  const nx = S.upcoming.filter(u => u.key !== e.key).slice(0, 3);
+  if (!nx.length) return '';
+  return el('div', { class: 'nextchips' }, el('div', { class: 'kicker' }, 'Danach'),
+    el('div', { class: 'chiprow' }, nx.map(u => el('span', { class: 'nchip' + (u.cancelled ? ' off' : ''), title: u.cancelled ? 'fällt aus' : '' },
+      fmt(u.start, { weekday: 'short' }).replace('.', '') + ' ' + dayFmt(u.day) + (u.cancelled ? ' · fällt aus' : '')))));
+}
+function left(ms) {
+  const h = Math.floor(ms / 3600e3), d = Math.floor(h / 24);
+  if (d >= 2) return 'noch ' + d + ' Tage';
+  if (h >= 1) return 'noch ' + h + ' Std.';
+  return 'noch ' + Math.max(1, Math.round(ms / 60e3)) + ' Min.';
+}
+
+/* ---------- Eigene Bestellung ---------- */
+function renderWho() {
+  const sel = $('who');
+  const keep = ME;
+  sel.replaceChildren(el('option', { value: '' }, '– Namen wählen –'), ...S.people.filter(p => p.active).map(p => el('option', { value: p.id }, p.name)));
+  sel.value = keep;
+}
+$('who').addEventListener('change', () => {
+  ME = $('who').value; store('wwf-me', ME); dirty = false;
+  draft = Object.assign({}, (mePerson() || {}).items || {});
+  $('saveMsg').textContent = ''; $('hist').hidden = true; $('histBtn').textContent = 'Verlauf anzeigen';
+  renderItems(); renderMe(); renderList(); renderBalances();
+});
+$('newToggle').addEventListener('click', () => { $('newBox').hidden = !$('newBox').hidden; if (!$('newBox').hidden) $('newName').focus(); });
+$('newBox').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('newName').value.trim();
+  if (!/,/.test(name)) { $('saveMsg').className = 'msg err'; $('saveMsg').textContent = 'Bitte als „Nachname, Vorname“ eintragen.'; return; }
+  try {
+    const st = await call('addPerson', PIN, name);
+    ME = st.selected; store('wwf-me', ME); dirty = false;
+    $('newName').value = ''; $('newBox').hidden = true;
+    apply(st);
+    $('saveMsg').className = 'msg ok'; $('saveMsg').textContent = name + ' ist angelegt. Jetzt Bestellung eintragen.';
+  } catch (err) { $('saveMsg').className = 'msg err'; $('saveMsg').textContent = errText(err); }
+});
+
+/* ---------- Symbole je Produkt (bei 3 Weißwürsten drei kleine Weißwürste) ---------- */
+const PRETZEL = '<g fill="none" stroke="#a85f25" stroke-width="2.6" stroke-linecap="round"><path d="M4 11c-2 6 3 10 8 10s10-4 8-10"/><path d="M4 11c0-6 5-8 8-3 3-5 8-3 8 3"/><path d="M12 8c-1 4-3 7-5 11M12 8c1 4 3 7 5 11"/></g>';
+const GLASS = (beer, foam) => '<path d="M8 4h8c.4 4-1 6-1.5 8.5-.5 2.6.5 5 .5 7.5H9c0-2.5 1-4.9.5-7.5C9 10 7.6 8 8 4z" fill="' + beer + '" stroke="#a87a1e" stroke-width=".9"/>' +
+  '<path d="M7.6 4.4c.6-1.7 2.2-1.8 3-.2.7-1.5 2.3-1.5 3 0 .7-1.3 2.1-1.2 2.8.2V6H7.6z" fill="' + foam + '" stroke="#c8c0ad" stroke-width=".6"/><rect x="8.6" y="20" width="6.8" height="1.8" rx=".9" fill="#c8c0ad"/>';
+const ICONS = {
+  ww: '<path d="M4.4 9.4C7.4 14.6 16.6 14.6 19.6 9.4" fill="none" stroke="#a8977a" stroke-width="8.4" stroke-linecap="round"/><path d="M4.4 9.4C7.4 14.6 16.6 14.6 19.6 9.4" fill="none" stroke="#f4eee2" stroke-width="6.2" stroke-linecap="round"/><path d="M2.9 7.2L1.8 5.4M21.1 7.2l1.1-1.8" stroke="#a8977a" stroke-width="1.2" stroke-linecap="round"/><circle cx="8.4" cy="11.6" r=".75" fill="#5f9645"/><circle cx="12.2" cy="13" r=".75" fill="#5f9645"/><circle cx="15.8" cy="11.4" r=".7" fill="#5f9645"/>',
+  wiener: '<rect x="2" y="9.6" width="20" height="4.8" rx="2.4" fill="#c9733f" stroke="#8e4a24" stroke-width="1"/>',
+  brezn: PRETZEL + '<g fill="#fff"><circle cx="6" cy="16" r=".9"/><circle cx="18" cy="16" r=".9"/><circle cx="12" cy="20.4" r=".9"/><circle cx="7.5" cy="7.6" r=".8"/><circle cx="16.5" cy="7.6" r=".8"/></g>',
+  brezn_os: PRETZEL,
+  obatzda: '<path d="M3 12.5h18a9 6.5 0 0 1-18 0z" fill="#fff" stroke="#93a0b3" stroke-width="1.1"/><path d="M6 12.5c.8-4.4 11.2-4.4 12 0z" fill="#e59a35"/><circle cx="12" cy="9.6" r=".9" fill="#b8402a"/>',
+  hummus: '<path d="M3 12.5h18a9 6.5 0 0 1-18 0z" fill="#fff" stroke="#93a0b3" stroke-width="1.1"/><path d="M6 12.5c.8-4.4 11.2-4.4 12 0z" fill="#d9c18c"/><circle cx="11" cy="10" r=".9" fill="#6c8f3a"/><circle cx="13.6" cy="10.6" r=".7" fill="#c0492b"/>',
+  bier: GLASS('#e9b545', '#fff'),
+  bier_af: GLASS('#f4dc93', '#fff') + '<circle cx="17.8" cy="18.6" r="3.2" fill="#2f8f57"/><path d="M16.4 18.6h2.8" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>'
+};
+function icons(key, n, size) {
+  if (!ICONS[key] || !n) return '';
+  const box = el('span', { class: 'ico' + (size === 's' ? ' s' : ''), 'aria-hidden': 'true' });
+  const show = Math.min(n, 10);
+  for (let i = 0; i < show; i++) box.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24">' + ICONS[key] + '</svg>');
+  if (n > show) box.append(el('em', {}, '+' + (n - show)));
+  return box;
+}
+function comboIcons(items) {
+  return el('span', { class: 'combo', 'aria-hidden': 'true' }, S.articles.filter(a => items[a.key]).map(a => icons(a.key, items[a.key], 's')));
+}
+// Nach der Sperre dürfen Nutzer nur noch beantragen; die Verwaltung ändert direkt.
+const requestMode = () => !!(S.event && S.event.locked && S.role !== 'admin');
+
+function renderItems() {
+  const box = $('items'); box.replaceChildren();
+  const can = editable() && !!ME;
+  S.articles.forEach(a => {
+    const n = draft[a.key] || 0;
+    const out = el('output', { 'aria-live': 'polite' }, n);
+    const set = v => { draft[a.key] = Math.max(0, Math.min(20, v)); dirty = true; renderItems(); $('saveMsg').textContent = ''; };
+    box.append(el('div', { class: 'item' + (n ? ' has' : '') },
+      el('div', { class: 'itxt' }, el('div', { class: 'nm' }, a.name), el('div', { class: 'pr' }, eur(a.price), icons(a.key, n))),
+      el('div', { class: 'step' },
+        el('button', { type: 'button', 'aria-label': a.name + ' weniger', disabled: !can || !n, onclick: () => set(n - 1) }, '−'),
+        out,
+        el('button', { type: 'button', 'aria-label': a.name + ' mehr', disabled: !can, onclick: () => set(n + 1) }, '+'))));
+  });
+  const me = mePerson() || {};
+  const last = me.last;
+  $('repeat').hidden = !can || !last;
+  if (last) $('repeat').replaceChildren('↻ Wie letztes Mal (' + dayFmt(last.day) + ')', comboIcons(last.items));
+  $('orderSum').textContent = eur(draftCost());
+  $('save').disabled = !can || !dirty || busy;
+  const has = S.articles.some(a => (me.items || {})[a.key] > 0);
+  const saved = !!ME && !dirty && !busy && has && !requestMode();
+  $('save').textContent = requestMode() ? 'Änderung beantragen' : saved ? 'Eingetragen ✓' : S.event && S.event.locked ? 'Korrektur speichern' : 'Eintragen';
+  $('save').classList.toggle('done', saved);
+  // Austragen: bis zur Sperre direkt, danach als Antrag
+  $('leave').hidden = !can || !has;
+  if (!quitArmed) $('leave').textContent = requestMode() ? 'Austragen beantragen' : 'Austragen';
+  // offener Antrag
+  const rq = me.request;
+  $('reqNote').hidden = !rq;
+  if (rq) $('reqNote').replaceChildren('Dein Antrag wartet auf Franz: ', el('b', {}, S.articles.filter(a => rq[a.key]).map(a => rq[a.key] + '× ' + a.name).join(', ') || 'austragen'), ' ', comboIcons(rq));
+  if (!ME) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = $('saveMsg').textContent || 'Erst oben deinen Namen wählen.'; }
+  else if (requestMode() && !dirty && !rq && !$('saveMsg').textContent) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = 'Die Liste ist gesperrt. Änderungen oder Austragen kannst du noch beantragen, Franz entscheidet.'; }
+}
+let quitArmed = 0;
+$('leave').addEventListener('click', async () => {
+  if (!quitArmed) {   // erst nachfragen
+    quitArmed = setTimeout(() => { quitArmed = 0; renderItems(); }, 4000);
+    $('leave').textContent = requestMode() ? 'Wirklich Austragen beantragen?' : 'Wirklich austragen?';
+    return;
+  }
+  clearTimeout(quitArmed); quitArmed = 0;
+  draft = {}; dirty = true;
+  $('save').click();
+});
+// Füllt nur aus, speichert nicht: erst „Eintragen“ schickt es ab.
+$('repeat').addEventListener('click', () => {
+  const last = (mePerson() || {}).last;
+  if (!last) return;
+  draft = {};
+  S.articles.forEach(a => { if (last.items[a.key]) draft[a.key] = last.items[a.key]; });
+  dirty = true; renderItems(); renderMe();
+  $('saveMsg').className = 'msg'; $('saveMsg').textContent = 'Wie am ' + dayFmt(last.day) + ' ausgefüllt. Noch nicht eingetragen: bitte „Eintragen“ tippen.';
+});
+const draftCost = () => S.articles.reduce((s, a) => s + (draft[a.key] || 0) * a.price, 0);
+
+$('save').addEventListener('click', async () => {
+  if (!ME || !S.event) return;
+  busy = true; renderItems();
+  $('saveMsg').className = 'msg'; $('saveMsg').textContent = 'Speichere …';
+  try {
+    const asked = requestMode();
+    const total = S.articles.reduce((s, a) => s + (draft[a.key] || 0), 0);
+    const st = await call(asked ? 'requestChange' : 'saveOrder', PIN, S.event.key, ME, draft);
+    dirty = false; busy = false; apply(st);
+    $('saveMsg').className = 'msg ok';
+    $('saveMsg').textContent = asked ? (total ? 'Änderung beantragt. Franz entscheidet.' : 'Austragen beantragt. Franz entscheidet.')
+      : total ? 'Eingetragen um ' + fmt(Date.now(), { hour: '2-digit', minute: '2-digit' }) + ' Uhr.' : 'Ausgetragen.';
+  } catch (e) {
+    busy = false; renderItems();
+    if (isPinErr(e)) return showPin(errText(e));
+    $('saveMsg').className = 'msg err'; $('saveMsg').textContent = errText(e);
+  }
+});
+
+function renderMe() {
+  const p = mePerson(), box = $('balBox');
+  $('histBtn').hidden = !p;
+  $('meEmpty').hidden = !!p;
+  renderPay();
+  if (!p) { box.hidden = true; $('hist').hidden = true; return; }
+  box.hidden = false; box.replaceChildren();
+  const b = p.balance;
+  box.append(el('div', {}, 'Kontostand: ', el('b', { class: b < 0 ? 'neg' : '' }, eur(b)), p.booked && p.cost ? el('span', { class: 'muted' }, ' (dieses WWF ist schon abgezogen)') : ''));
+  if (S.event && !p.booked) {
+    const after = b - draftCost();
+    if (draftCost() > 0) box.append(el('div', {}, 'Nach diesem WWF: ', el('b', { class: after < 0 ? 'neg' : '' }, eur(after))));
+  }
+  const low = b < 0 || (S.event && !p.booked && b - draftCost() < 0);
+  if (low) box.append(el('div', { class: 'neg' }, 'Bitte aufladen, siehe „Aufladen“.'));
+}
+$('histBtn').addEventListener('click', async () => {
+  const h = $('hist');
+  if (!h.hidden) { h.hidden = true; $('histBtn').textContent = 'Verlauf anzeigen'; return; }
+  h.hidden = false; h.replaceChildren(el('p', { class: 'muted' }, 'Lade …'));
+  try {
+    const r = await call('getHistory', PIN, ME);
+    h.replaceChildren(...r.lines.map(l => el('div', {}, el('span', {}, l.day ? dayFmt(l.day) + l.day.slice(2, 4) : ''), el('span', {}, l.text), el('b', { class: l.amount < 0 ? 'neg' : '' }, (l.amount > 0 ? '+' : '') + eur(l.amount)))),
+      el('div', {}, el('span', {}, ''), el('span', { class: 'muted' }, 'Startstand aus der Excel-Liste' + (r.startDay ? ' (' + r.startDay + ')' : '')), el('b', {}, eur(r.start))));
+    $('histBtn').textContent = 'Verlauf ausblenden';
+  } catch (e) { h.replaceChildren(el('p', { class: 'msg err' }, errText(e))); }
+});
+
+/* ---------- Liste aller ---------- */
+function renderList() {
+  const on = S.people.filter(p => S.articles.some(a => p.items[a.key]));
+  $('cnt').textContent = on.length ? on.length + (on.length === 1 ? ' Person' : ' Personen') : '';
+  $('shop').replaceChildren(...S.articles.filter(a => S.totals.items[a.key]).map(a => el('span', { class: 'chip' }, S.totals.items[a.key] + '× ' + a.name)),
+    S.totals.sum ? el('span', { class: 'chip' }, 'zusammen ' + eur(S.totals.sum)) : '');
+  const t = $('list');
+  if (!on.length) { t.replaceChildren(el('tbody', {}, el('tr', {}, el('td', { class: 'muted' }, S.event ? 'Noch niemand eingetragen.' : '')))); return; }
+  const arts = S.articles.filter(a => S.totals.items[a.key]);
+  t.replaceChildren(
+    el('thead', {}, el('tr', {}, el('th', {}, 'Name'), arts.map(a => el('th', {}, a.name)), el('th', {}, 'Kosten'))),
+    el('tbody', {}, on.map(p => el('tr', { class: p.id === ME ? 'me' : '' }, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', {}, eur(p.cost))))),
+    el('tfoot', {}, el('tr', {}, el('td', {}, 'Einkaufsliste'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', {}, eur(S.totals.sum)))));
+}
+
+/* ---------- Kalender ---------- */
+// Monatsraster (Mo–So). Termine kommen als 'JJJJ-MM-TT' vom Server; gerechnet wird mit reinen Kalendertagen in UTC.
+let calMonth = '';
+const LOCK_SVG = '<svg class="lk" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 7V5a4 4 0 0 1 8 0v2h1v8H3V7h1zm2 0h4V5a2 2 0 0 0-4 0v2z"/></svg>';
+const ymd = d => d.toISOString().slice(0, 10);
+const addMonth = (m, k) => { const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + k, 1)); return ymd(d).slice(0, 7); };
+function renderCal() {
+  const evs = (S.calendar || []).filter(e => !(e.cancelled && e.extra));
+  const today = new Date(S.now).toLocaleDateString('sv-SE', { timeZone: TZ });
+  const months = evs.map(e => e.day.slice(0, 7));
+  const min = months.length ? months.reduce((a, b) => a < b ? a : b) : today.slice(0, 7);
+  const max = months.length ? months.reduce((a, b) => a > b ? a : b) : today.slice(0, 7);
+  if (!calMonth) calMonth = S.event ? S.event.day.slice(0, 7) : today.slice(0, 7);
+  if (calMonth < min) calMonth = min;
+  if (calMonth > max) calMonth = max;
+
+  const first = new Date(calMonth + '-01T00:00:00Z');
+  $('calTitle').textContent = first.toLocaleDateString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  $('calPrev').disabled = calMonth <= min; $('calNext').disabled = calMonth >= max;
+
+  const byDay = {}, lockDays = {};
+  evs.forEach(e => {
+    byDay[e.day] = e;
+    if (!e.cancelled) lockDays[new Date(e.lock).toLocaleDateString('sv-SE', { timeZone: TZ })] = true;
+  });
+  const curKey = S.event && S.event.key;
+  const cells = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map(w => el('div', { class: 'wd' }, w));
+  const lead = (first.getUTCDay() + 6) % 7;
+  const days = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  for (let i = 0; i < lead; i++) cells.push(el('div', { class: 'd out' }));
+  const seen = {};
+  for (let n = 1; n <= days; n++) {
+    const d = calMonth + '-' + String(n).padStart(2, '0');
+    const e = byDay[d];
+    let cls = 'd', label = n + '.';
+    if (d === today) { cls += ' today'; seen.today = 1; }
+    if (lockDays[d]) { cls += ' lock'; label += ' Eintragen bis 14:00'; seen.lock = 1; }
+    if (e) {
+      const kind = e.cancelled ? 'off' : e.key === curKey ? 'cur' : e.past ? 'past' : 'plan';
+      seen[kind] = 1;
+      cls += ' wwf' + (kind === 'plan' ? '' : ' ' + kind) + (kind === 'cur' && (e.locked || S.now >= e.start) ? ' closed' : '');
+      label += e.cancelled ? ' WWF fällt aus' : ' WWF ' + fmt(e.start, { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    }
+    const cell = el('div', { class: cls, title: label, 'aria-label': label }, n);
+    if (lockDays[d]) cell.insertAdjacentHTML('beforeend', LOCK_SVG);
+    cells.push(cell);
+  }
+  $('cal').replaceChildren(...cells);
+  // Legende: nur, was in diesem Monat vorkommt, mit Kästchen wie im Kalender
+  const LEG = [['cur', 'nächstes WWF'], ['plan', 'weiteres WWF'], ['past', 'WWF war'], ['off', 'fällt aus'], ['lock', 'Eintragen bis 14:00']];
+  $('calLegend').replaceChildren(...LEG.filter(([k]) => seen[k]).map(([k, t]) => {
+    const sw = el('i', { class: 'sw ' + k + (k === 'cur' && S.event && (S.event.locked || S.now >= S.event.start) ? ' closed' : ''), 'aria-hidden': 'true' });
+    if (k === 'lock') sw.insertAdjacentHTML('beforeend', LOCK_SVG);
+    return el('span', {}, sw, t);
+  }));
+
+  const inMonth = evs.filter(e => e.day.slice(0, 7) === calMonth);
+  $('calList').replaceChildren(...(inMonth.length ? inMonth.map(e => {
+    const when = fmt(e.start, { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' · ' + fmt(e.start, { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    let info;
+    if (e.cancelled) info = el('span', { class: 'off' }, 'fällt aus' + (e.note ? ' · ' + e.note : ''));
+    else if (e.past) info = el('span', { class: 'muted' }, e.people ? e.people + (e.people === 1 ? ' Person war dabei' : ' Personen waren dabei') : 'vorbei');
+    else info = el('span', { class: 'muted' }, [e.moved ? 'verschoben vom ' + dayFmt(e.key) : '', e.extra ? 'zusätzlich' : '',
+      e.locked ? 'Liste gesperrt' : 'Eintragen bis ' + fmt(e.lock, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr',
+      e.people ? e.people + ' angemeldet' : '', e.note].filter(Boolean).join(' · '));
+    return el('div', {}, el('b', { class: e.cancelled ? 'off' : '' }, when), info);
+  }) : [el('p', { class: 'muted' }, 'In diesem Monat kein WWF.')]));
+}
+$('calPrev').addEventListener('click', () => { calMonth = addMonth(calMonth, -1); renderCal(); });
+$('calNext').addEventListener('click', () => { calMonth = addMonth(calMonth, 1); renderCal(); });
+
+function renderBalances() {
+  const t = $('balances');
+  const admin = S.role === 'admin';
+  $('balCard').hidden = !admin;
+  if (!admin) { t.replaceChildren(); return; }
+  t.replaceChildren(el('tbody', {}, S.people.map(p => el('tr', { class: (p.id === ME ? 'me ' : '') + (p.active ? '' : 'inactive') },
+    el('td', {}, p.name, p.active ? '' : ' (ausgeblendet)'),
+    el('td', { class: p.balance < 0 ? 'neg' : '' }, eur(p.balance)),
+    admin ? el('td', {}, el('button', { class: 'small', type: 'button', onclick: () => adminCall('setPersonActive', [p.id, !p.active], 'balMsg') }, p.active ? 'ausblenden' : 'einblenden')) : ''))));
+}
+
+/* ---------- Verwaltung ---------- */
+function renderAdmin() {
+  const on = S.role === 'admin';
+  $('admin').hidden = !on;
+  if (!on) return;
+  const sel = $('tuWho'), keep = sel.value;
+  sel.replaceChildren(el('option', { value: '' }, '– Person –'), ...S.people.map(p => el('option', { value: p.id }, p.name)));
+  sel.value = keep;
+  $('tuList').replaceChildren(...(S.topups || []).map(t => el('div', {}, el('span', {}, t.day ? dayFmt(t.day) + t.day.slice(2, 4) : ''), el('span', {}, t.name + ' · ' + (t.via === 'konto' ? 'Überweisung' : 'bar') + (t.note ? ' · ' + t.note : '')), el('b', {}, eur(t.amount)))));
+  renderKasse(); renderEinkauf(); renderBillForm(); renderRequests();
+  $('evList').replaceChildren(...S.upcoming.map(u => {
+    const date = el('input', { type: 'date', value: u.day, 'aria-label': 'Neues Datum für ' + dayFmt(u.key) });
+    return el('div', { class: 'ev' },
+      el('b', {}, fmt(u.start, { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })),
+      el('span', { class: 'muted' }, u.cancelled ? 'fällt aus' : u.moved ? 'verschoben vom ' + dayFmt(u.key) : u.extra ? 'zusätzlich' : ''),
+      u.cancelled || u.moved || u.extra
+        ? el('button', { class: 'small', type: 'button', onclick: () => adminCall('setEvent', [u.key, 'normal', '', ''], 'evMsg') }, u.extra ? 'Löschen' : 'Zurücksetzen')
+        : el('button', { class: 'small', type: 'button', onclick: () => adminCall('setEvent', [u.key, 'ausfallen', '', ''], 'evMsg') }, 'Fällt aus'),
+      u.cancelled || u.extra ? '' : date,
+      u.cancelled || u.extra ? '' : el('button', { class: 'small', type: 'button', onclick: () => adminCall('setEvent', [u.key, 'verschieben', date.value, ''], 'evMsg') }, 'Verschieben'));
+  }));
+}
+async function adminCall(fn, args, msgId) {
+  const m = $(msgId); m.className = 'msg'; m.textContent = 'Speichere …';
+  try { apply(await call(fn, PIN, ...args)); m.className = 'msg ok'; m.textContent = 'Gespeichert.'; return true; }
+  catch (e) { m.className = 'msg err'; m.textContent = errText(e); return false; }
+}
+$('tuForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const ok = await adminCall('addTopup', [$('tuWho').value, $('tuAmount').value, $('tuNote').value, $('tuVia').value], 'tuMsg');
+  if (ok) { $('tuAmount').value = ''; $('tuNote').value = ''; }
+});
+
+/* ---------- Anträge (Änderung oder Austragen nach der Sperre) ---------- */
+function renderRequests() {
+  const list = S.requests || [];
+  $('rqBox').hidden = !list.length;
+  $('admSub').textContent = list.length ? '⚑ ' + list.length + (list.length === 1 ? ' Antrag offen' : ' Anträge offen') : 'Aufladen, Kasse, Einkauf, Termine, Kontostände';
+  $('rqList').replaceChildren(...list.map(r => el('div', { class: 'rq' },
+    el('span', { class: 'who' }, r.name),
+    el('span', { class: 'chg' }, 'WWF ' + dayFmt(r.day) + ': bisher ' + r.now + ' (' + eur(r.before) + ') → ', el('b', {}, r.wish), ' (' + eur(r.after) + ')'),
+    el('button', { class: 'small', type: 'button', onclick: () => adminCall('decideRequest', [r.row, true], 'rqMsg') }, 'Übernehmen'),
+    el('button', { class: 'small', type: 'button', onclick: () => adminCall('decideRequest', [r.row, false], 'rqMsg') }, 'Ablehnen'))));
+}
+
+/* ---------- Kasse: Barkasse + Revolut-Konto gegen Guthaben der Leute ---------- */
+const signed = n => (n > 0 ? '+' : '') + eur(n);
+function tile(label, value, sub, cls) { return el('div', { class: 'tile2 ' + (cls || '') }, el('span', {}, label), el('b', {}, value), sub ? el('small', {}, sub) : ''); }
+function renderKasse() {
+  const k = S.kasse; if (!k) return;
+  const has = k.soll !== null;
+  $('kaTiles').replaceChildren(
+    tile('Kasse soll', has ? eur(k.soll) : '–', has ? 'bar ' + eur(k.bar) + ' · Konto ' + eur(k.konto) : 'noch nie gezählt'),
+    tile('Guthaben der Leute', eur(k.guthaben), 'Summe aller Kontostände'),
+    tile(has && k.reserve < 0 ? 'Fehlbetrag' : 'Überschuss', has ? signed(k.reserve) : '–', 'Kasse − Guthaben', has ? (k.reserve < 0 ? 'neg' : 'pos') : ''));
+  $('kaHint').textContent = has
+    ? 'Soll = gezählter Stand vom ' + dayFmt(k.since) + k.since.slice(2, 4) + ' + Aufladungen − Einkäufe seitdem (bar und Konto getrennt). Zählen und eintragen, dann siehst du unten die Abweichung.'
+    : 'Einmal Bargeld (und Revolut-Konto) zählen und eintragen. Ab dann rechnet die Kasse mit: Bar-Aufladungen kommen in die Barkasse, Überweisungen aufs Konto, Einkäufe gehen ab.';
+  $('kaTable').replaceChildren(...(k.counts.length ? [
+    el('thead', {}, el('tr', {}, el('th', {}, 'Gezählt am'), el('th', {}, 'bar'), el('th', {}, 'Konto'), el('th', {}, 'Ist'), el('th', {}, 'Soll'), el('th', {}, 'Abweichung'))),
+    el('tbody', {}, k.counts.map(c => el('tr', {}, el('td', {}, dayFmt(c.day) + c.day.slice(2, 4) + (c.note ? ' · ' + c.note : '')), el('td', {}, eur(c.bar)), el('td', {}, eur(c.konto)),
+      el('td', {}, eur(c.ist)), el('td', {}, c.soll === null ? '–' : eur(c.soll)), el('td', { class: c.diff < 0 ? 'neg' : '' }, c.diff === null ? 'Start' : signed(c.diff)))))] : []));
+}
+$('kaForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const ok = await adminCall('addCount', [$('kaBar').value, $('kaKonto').value, $('kaNote').value], 'kaMsg');
+  if (ok) { $('kaBar').value = ''; $('kaKonto').value = ''; $('kaNote').value = ''; }
+});
+
+/* ---------- Einkauf und Preise: Einnahmen gegen Rechnungen ---------- */
+let ekKey = '';
+function renderEinkauf() {
+  const k = S.einkauf; if (!k) return;
+  $('ekTable').replaceChildren(...(k.list.length ? [
+    el('thead', {}, el('tr', {}, el('th', {}, 'WWF'), el('th', {}, 'Einnahmen'), el('th', {}, 'Einkauf'), el('th', {}, 'Ergebnis'))),
+    el('tbody', {}, k.list.map(o => el('tr', {}, el('td', {}, dayFmt(o.day) + o.day.slice(2, 4) + (o.locked ? '' : ' (läuft noch)')), el('td', {}, eur(o.revenue)),
+      el('td', {}, o.spend ? eur(o.spend) : '–'), el('td', { class: o.spend && o.diff < 0 ? 'neg' : '' }, o.spend ? signed(o.diff) : 'Rechnung fehlt')))),
+    el('tfoot', {}, el('tr', {}, el('td', {}, 'Seit Start (gesperrte WWF)'), el('td', {}, eur(k.revenue)), el('td', {}, eur(k.spend)), el('td', { class: k.diff < 0 ? 'neg' : '' }, signed(k.diff))))] :
+    [el('tbody', {}, el('tr', {}, el('td', { class: 'muted' }, 'Noch keine Bestellungen oder Rechnungen.')))]));
+  const sel = $('ekSel');
+  $('ekPick').hidden = !k.list.length;
+  if (!k.list.some(o => o.key === ekKey)) ekKey = (k.list.find(o => o.spend) || k.list[0] || {}).key || '';
+  sel.replaceChildren(...k.list.map(o => el('option', { value: o.key }, 'WWF ' + dayFmt(o.day) + o.day.slice(2, 4))));
+  sel.value = ekKey;
+  const o = k.list.find(x => x.key === ekKey);
+  if (!o) { $('ekArts').replaceChildren(); return; }
+  $('ekArts').replaceChildren(
+    el('thead', {}, el('tr', {}, el('th', {}, 'Warengruppe'), el('th', {}, 'Stück verkauft'), el('th', {}, 'Einnahmen'), el('th', {}, 'Einkauf'), el('th', {}, 'Ø Preis / Einkauf je Stück'), el('th', {}, 'Ergebnis'))),
+    el('tbody', {}, o.rows.map(r => el('tr', {}, el('td', {}, r.name), el('td', {}, r.sold || ''), el('td', {}, r.revenue ? eur(r.revenue) : ''), el('td', {}, r.spend ? eur(r.spend) : '–'),
+      el('td', { class: r.unitBuy !== null && r.unitSell !== null && r.unitBuy > r.unitSell ? 'neg' : '' }, (r.unitSell !== null ? eur(r.unitSell) : '–') + ' / ' + (r.unitBuy !== null ? eur(r.unitBuy) : '–')),
+      el('td', { class: r.diff < 0 ? 'neg' : '' }, signed(r.diff))))));
+}
+function renderBillForm() {
+  // zuletzt hinterlegte Rechnungen
+  $('rbList').replaceChildren(...((S.einkauf || {}).recent || []).map(p => el('div', {}, el('span', {}, p.day ? dayFmt(p.day) + p.day.slice(2, 4) : ''),
+    el('span', {}, [p.group, p.shop, p.note, p.paid].filter(Boolean).join(' · ')), el('b', {}, eur(p.amount)))));
+  const sel = $('rbPayer'), keep = sel.value;
+  sel.replaceChildren(el('option', { value: 'bar' }, 'bezahlt aus der Barkasse'), el('option', { value: 'konto' }, 'bezahlt vom Revolut-Konto'),
+    el('optgroup', { label: 'privat bezahlt von …' }, ...S.people.filter(p => p.active).map(p => el('option', { value: p.id }, p.name))));
+  sel.value = keep || 'bar';
+  $('rbRefund').hidden = sel.value === 'bar' || sel.value === 'konto';
+  if (!$('rbDay').value) $('rbDay').value = new Date(S.now).toLocaleDateString('sv-SE', { timeZone: TZ });
+}
+$('rbPayer').addEventListener('change', () => { $('rbRefund').hidden = ['bar', 'konto'].includes($('rbPayer').value); });
+$('rbForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const payer = $('rbPayer').value;
+  const ok = await adminCall('addBill', [{ day: $('rbDay').value, group: $('rbGroup').value, amount: $('rbAmount').value, shop: $('rbShop').value,
+    payer, refund: ['bar', 'konto'].includes(payer) ? '' : $('rbRefund').value }], 'rbMsg');
+  if (ok) { $('rbAmount').value = ''; $('rbShop').value = ''; $('rbGroup').value = ''; }
+});
+$('ekSel').addEventListener('change', () => { ekKey = $('ekSel').value; renderEinkauf(); });
+$('ekBtn').addEventListener('click', async () => {
+  const m = $('ekMsg'); m.className = 'msg'; m.textContent = 'Speichere …';
+  try {
+    const st = await call('addPurchases', PIN, $('ekText').value);
+    apply(st); $('ekText').value = '';
+    m.className = 'msg ok'; m.textContent = st.added + (st.added === 1 ? ' Zeile' : ' Zeilen') + ' gebucht.';
+  } catch (err) { m.className = 'msg err'; m.textContent = errText(err); }
+});
+$('extraForm').addEventListener('submit', e => { e.preventDefault(); adminCall('setEvent', [$('extraDay').value, 'extra', '', ''], 'evMsg'); });
+
+document.querySelectorAll('details.fold').forEach(d => {
+  d.open = store('wwf-fold-' + d.dataset.fold) === '1';
+  d.addEventListener('toggle', () => store('wwf-fold-' + d.dataset.fold, d.open ? '1' : '0'));
+});
+
+/* ---------- Start ---------- */
+PIN = store('wwf-pin'); ME = store('wwf-me');
+load();
+const typing = () => document.activeElement && document.activeElement.tagName === 'INPUT';
+setInterval(() => { if (!dirty && !busy && !typing() && document.visibilityState === 'visible') load(true); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !dirty && !busy) load(true); });
+</script>
+</body>
+</html>
