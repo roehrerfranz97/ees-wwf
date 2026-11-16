@@ -434,7 +434,22 @@ function store(k, v) { try { if (v === undefined) return localStorage.getItem(k)
 // In Apps Script direkt über google.script.run; auf GitHub Pages ohne Google-Anmeldung über den POST-Eingang des Skripts
 // (so stören mehrere Google-Konten im Browser nicht).
 const API_URL = 'https://script.google.com/macros/s/AKfycbzXSS42Xk1iUtTLm-rcs36fvgQ5HomxHzp5vWDXqgLoelhph04u6-Han4DdyTkYZWI/exec';
-function call(fn, ...args) {
+// Speichern gerade viele gleichzeitig, wurde nichts geschrieben: dann bis zu 4-mal selbst nochmal versuchen,
+// mit zufälliger Pause, damit nicht alle im selben Moment wiederkommen. Bei Google-Überlast („too many …“)
+// oder ohne Antwort nur, wo ein zweites Mal nichts doppelt macht (Laden, Bestellung, Antrag: die ersetzen sich).
+const SAFE_AGAIN = ['getState', 'saveOrder', 'requestChange'];
+async function call(fn, ...args) {
+  for (let i = 0; ; i++) {
+    try { return await call1(fn, ...args); }
+    catch (e) {
+      const m = errText(e);
+      const again = /gleichzeitig/.test(m) || (SAFE_AGAIN.includes(fn) && /too many|simultan|Server nicht erreichbar|Failed to fetch|NetworkError/i.test(m));
+      if (i >= 4 || !again) throw e;
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 3000));
+    }
+  }
+}
+function call1(fn, ...args) {
   if (window.google && google.script && google.script.run)
     return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
   return fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn, args }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, credentials: 'omit', redirect: 'follow' })
