@@ -23,6 +23,7 @@
   --ok-soft: #e1f2e8;
   --bad: #b3261e;
   --bad-soft: #fbe6e4;
+  --stripe: #f2f4f7;
   --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
   --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
@@ -31,7 +32,7 @@
   :root {
     --bg: #0e1520; --surface: #172131; --line: #29364a; --ink: #e7edf6; --muted: #9aa9bf;
     --blue: #6aa8ec; --blue-soft: #18304d; --senf: #e0aa4f; --senf-soft: #3a2b12;
-    --ok: #4cc785; --ok-soft: #153022; --bad: #f08a80; --bad-soft: #3b1a17;
+    --ok: #4cc785; --ok-soft: #153022; --bad: #f08a80; --bad-soft: #3b1a17; --stripe: #1c2738;
     color-scheme: dark;
   }
 }
@@ -163,7 +164,8 @@ th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: rig
 th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 9rem; }
 th { font-weight: 600; color: var(--muted); font-size: .8rem; vertical-align: bottom; }
 tfoot td { font-weight: 700; border-bottom: 0; }
-tr.me td { background: var(--blue-soft); }
+#list tbody tr:nth-child(even) td { background: var(--stripe); }   /* Zeilen abwechselnd weiß und dezent grau */
+tr.me td, #list tbody tr.me td { background: var(--blue-soft); }
 tr.inactive td { color: var(--muted); }
 .hist { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; }
 .hist div { display: grid; grid-template-columns: 6.5em 1fr auto; gap: 8px; font-variant-numeric: tabular-nums; }
@@ -199,6 +201,27 @@ tr.inactive td { color: var(--muted); }
 .calList .off { color: var(--bad); }
 #pinBox { max-width: 420px; }
 footer { display: flex; justify-content: center; }
+/* Drucken: nur die Bestellliste des aktuellen Termins, schwarz auf weiß (Knopf „Drucken“ bei „Angemeldet“) */
+#printSheet { display: none; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #fff !important; }
+  body > *:not(#printSheet) { display: none !important; }
+  #printSheet { display: block; color: #000; font-family: Arial, sans-serif; font-size: 11pt; }
+  #printSheet h1 { font-size: 18pt; margin: 0 0 2mm; }
+  #printSheet .sub { margin: 0 0 5mm; color: #333; }
+  #printSheet table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+  #printSheet th, #printSheet td { border: 1px solid #888; padding: 2mm 2mm; text-align: center; color: #000; background: #fff; white-space: normal; }
+  #printSheet th { font-size: 9.5pt; font-weight: 700; vertical-align: bottom; }
+  #printSheet th:first-child, #printSheet td:first-child { text-align: left; min-width: 0; }
+  #printSheet td.num { text-align: right; white-space: nowrap; }
+  #printSheet td.ok { width: 12mm; }
+  #printSheet tbody tr:nth-child(even) td { background: #efefef; }
+  #printSheet, #printSheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #printSheet tfoot td { font-weight: 700; background: #d9d9d9; }
+  #printSheet tr { break-inside: avoid; }
+  #printSheet .shop { margin-top: 5mm; font-size: 12pt; }
+}
 @media (prefers-reduced-motion: no-preference) { .flash { animation: fl .6s ease; } @keyframes fl { from { background: var(--ok-soft); } } }
 </style>
 </head>
@@ -276,7 +299,7 @@ footer { display: flex; justify-content: center; }
     </section>
 
     <section class="card">
-      <h2>Angemeldet <small id="cnt"></small></h2>
+      <h2><span>Angemeldet <small id="cnt"></small></span><button class="small" id="printBtn" type="button" hidden>🖨 Drucken</button></h2>
       <div class="chips" id="shop"></div>
       <div class="tablewrap"><table id="list"></table></div>
     </section>
@@ -356,10 +379,12 @@ footer { display: flex; justify-content: center; }
           <input id="rbShop" placeholder="Geschäft / Notiz" aria-label="Geschäft oder Notiz">
           <select id="rbPayer" aria-label="Wer hat bezahlt" style="flex:1 1 14em"></select>
           <select id="rbRefund" aria-label="Erstattung" style="flex:1 1 14em" hidden>
-            <option value="credit">aufs WWF-Konto gutschreiben</option><option value="bar">bar aus der Kasse auszahlen</option><option value="konto">per Überweisung auszahlen</option>
+            <option value="credit">aufs WWF-Konto gutschreiben</option><option value="bar">bar aus der Kasse auszahlen</option><option value="split">anteilig: WWF-Konto + bar</option><option value="konto">per Überweisung auszahlen</option>
           </select>
+          <input id="rbCredit" inputmode="decimal" placeholder="davon aufs WWF-Konto, z. B. 10" aria-label="Anteil fürs WWF-Konto in Euro" style="flex:0 1 13em" hidden>
           <button class="small" type="submit">Rechnung speichern</button>
         </form>
+        <p class="muted" id="rbHint" hidden></p>
         <p class="msg" id="rbMsg" aria-live="polite"></p>
         <div class="hist" id="rbList"></div>
         <details class="sub">
@@ -715,6 +740,7 @@ function renderList() {
   $('cnt').textContent = on.length ? on.length + (on.length === 1 ? ' Person' : ' Personen') : '';
   $('shop').replaceChildren(...S.articles.filter(a => S.totals.items[a.key]).map(a => el('span', { class: 'chip' }, S.totals.items[a.key] + '× ' + a.name)),
     S.totals.sum ? el('span', { class: 'chip' }, 'zusammen ' + eur(S.totals.sum)) : '');
+  $('printBtn').hidden = !(S.event && on.length);
   const t = $('list');
   if (!on.length) { t.replaceChildren(el('tbody', {}, el('tr', {}, el('td', { class: 'muted' }, S.event ? 'Noch niemand eingetragen.' : '')))); return; }
   const arts = S.articles.filter(a => S.totals.items[a.key]);
@@ -723,6 +749,23 @@ function renderList() {
     el('tbody', {}, on.map(p => el('tr', { class: p.id === ME ? 'me' : '' }, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', {}, eur(p.cost))))),
     el('tfoot', {}, el('tr', {}, el('td', {}, 'Einkaufsliste'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', {}, eur(S.totals.sum)))));
 }
+// Drucken: baut aus dem aktuellen Stand ein schlichtes Blatt (Termin, Tabelle mit Spalte zum Abhaken, Einkaufsliste)
+// und öffnet den Druckdialog. Auf dem Bildschirm bleibt #printSheet unsichtbar.
+function buildPrint() {
+  const e = S.event, on = S.people.filter(p => S.articles.some(a => p.items[a.key]));
+  const arts = S.articles.filter(a => S.totals.items[a.key]);
+  const status = S.now >= e.lock ? 'Liste gesperrt' : 'Stand ' + fmt(Date.now(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr, eintragen noch bis ' +
+    fmt(e.lock, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+  $('printSheet').replaceChildren(
+    el('h1', {}, S.title + ' · ' + fmt(e.start, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + fmt(e.start, { hour: '2-digit', minute: '2-digit' }) + ' Uhr'),
+    el('p', { class: 'sub' }, on.length + (on.length === 1 ? ' Person' : ' Personen') + ' · ' + status),
+    el('table', {},
+      el('thead', {}, el('tr', {}, el('th', {}, 'Name'), arts.map(a => el('th', {}, a.name)), el('th', {}, 'Kosten'), el('th', {}, '✓'))),
+      el('tbody', {}, on.map(p => el('tr', {}, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', { class: 'num' }, eur(p.cost)), el('td', { class: 'ok' }, '')))),
+      el('tfoot', {}, el('tr', {}, el('td', {}, 'Summe'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', { class: 'num' }, eur(S.totals.sum)), el('td', {}, '')))),
+    el('p', { class: 'shop' }, el('b', {}, 'Einkaufsliste: '), arts.map(a => S.totals.items[a.key] + '× ' + a.name).join(' · ')));
+}
+$('printBtn').addEventListener('click', () => { buildPrint(); window.print(); });
 
 /* ---------- Kalender ---------- */
 // Monatsraster (Mo–So). Termine kommen als 'JJJJ-MM-TT' vom Server; gerechnet wird mit reinen Kalendertagen in UTC.
@@ -906,16 +949,34 @@ function renderBillForm() {
   sel.replaceChildren(el('option', { value: 'bar' }, 'bezahlt aus der Barkasse'), el('option', { value: 'konto' }, 'bezahlt vom Revolut-Konto'),
     el('optgroup', { label: 'privat bezahlt von …' }, ...S.people.filter(p => p.active).map(p => el('option', { value: p.id }, p.name))));
   sel.value = keep || 'bar';
-  $('rbRefund').hidden = sel.value === 'bar' || sel.value === 'konto';
+  rbShow();
   if (!$('rbDay').value) $('rbDay').value = new Date(S.now).toLocaleDateString('sv-SE', { timeZone: TZ });
 }
-$('rbPayer').addEventListener('change', () => { $('rbRefund').hidden = ['bar', 'konto'].includes($('rbPayer').value); });
+// Erstattung nur bei „privat bezahlt“; bei „anteilig“ das Feld für den Konto-Anteil; bei Bargeld der Hinweis, dass die Person es abholt.
+const rbNum = s => { const n = parseFloat(String(s || '').replace(/\s|€/g, '').replace(',', '.')); return isFinite(n) ? n : 0; };
+function rbShow() {
+  const payer = $('rbPayer').value, priv = !['bar', 'konto'].includes(payer), how = $('rbRefund').value;
+  $('rbRefund').hidden = !priv;
+  $('rbCredit').hidden = !(priv && how === 'split');
+  const pp = priv && S && S.people.find(x => x.id === payer), amt = rbNum($('rbAmount').value);
+  const p = pp && { name: pp.name.split(', ').reverse().join(' ') };   // „Muster, Max“ → „Max Muster“
+  let hint = '';
+  if (p && how === 'bar') hint = 'Bar: ' + p.name + ' holt ' + (amt ? eur(amt) : 'den Betrag') + ' bei dir ab, du gibst es aus der Kasse.';
+  if (p && how === 'split') {
+    const c = rbNum($('rbCredit').value);
+    hint = c > 0 && amt > c ? eur(c) + ' aufs WWF-Konto von ' + p.name + ', ' + eur(amt - c) + ' bar: ' + p.name + ' holt das bei dir ab.'
+      : 'Anteilig: oben den Betrag, daneben den Teil fürs WWF-Konto. Den Rest holt ' + p.name + ' bar bei dir ab.';
+  }
+  $('rbHint').textContent = hint; $('rbHint').hidden = !hint;
+}
+['rbPayer', 'rbRefund'].forEach(id => $(id).addEventListener('change', rbShow));
+['rbAmount', 'rbCredit'].forEach(id => $(id).addEventListener('input', rbShow));
 $('rbForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const payer = $('rbPayer').value;
+  const payer = $('rbPayer').value, priv = !['bar', 'konto'].includes(payer);
   const ok = await adminCall('addBill', [{ day: $('rbDay').value, group: $('rbGroup').value, amount: $('rbAmount').value, shop: $('rbShop').value,
-    payer, refund: ['bar', 'konto'].includes(payer) ? '' : $('rbRefund').value }], 'rbMsg');
-  if (ok) { $('rbAmount').value = ''; $('rbShop').value = ''; $('rbGroup').value = ''; }
+    payer, refund: priv ? $('rbRefund').value : '', credit: priv && $('rbRefund').value === 'split' ? $('rbCredit').value : '' }], 'rbMsg');
+  if (ok) { $('rbAmount').value = ''; $('rbShop').value = ''; $('rbGroup').value = ''; $('rbCredit').value = ''; rbShow(); }
 });
 $('ekSel').addEventListener('change', () => { ekKey = $('ekSel').value; renderEinkauf(); });
 $('ekBtn').addEventListener('click', async () => {
@@ -940,5 +1001,6 @@ const typing = () => document.activeElement && document.activeElement.tagName ==
 setInterval(() => { if (!dirty && !busy && !typing() && document.visibilityState === 'visible') load(true); }, 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !dirty && !busy) load(true); });
 </script>
+<div id="printSheet"></div>
 </body>
 </html>
