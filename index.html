@@ -200,6 +200,38 @@ tr.inactive td { color: var(--muted); }
 .calList div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .calList .off { color: var(--bad); }
 #pinBox { max-width: 420px; }
+/* Spendiertes WWF: Glitzer-Band mit Funkenfontänen, durchgestrichene Kosten */
+.party { position: relative; overflow: hidden; border-radius: 16px; padding: 18px 16px 20px; margin-bottom: 12px; text-align: center;
+  background: radial-gradient(ellipse at 50% 130%, #4b2390 0%, #22104a 55%, #120827 100%); color: #fff; box-shadow: 0 4px 18px rgba(40, 10, 90, .35); }
+.party .prow { position: relative; z-index: 1; display: flex; justify-content: center; align-items: center; gap: 12px; }
+.party .emo { font-size: clamp(1.5rem, 5vw, 2.2rem); }
+.party .glitter { position: relative; z-index: 1; font-family: var(--display); font-weight: 700; font-size: clamp(1.7rem, 6vw, 2.6rem); line-height: 1.1;
+  background: linear-gradient(100deg, #f7d774 0%, #fff6c9 18%, #e6a93a 36%, #ffffff 50%, #f7d774 62%, #ff9de2 80%, #f7d774 100%);
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: glit 3.5s linear infinite;
+  filter: drop-shadow(0 0 6px rgba(255, 215, 120, .55)); }
+.party .pline { position: relative; z-index: 1; margin-top: 6px; font-weight: 600; font-size: 1.05rem; color: #fff3c4; }
+.party .spark { position: absolute; bottom: 4px; width: 5px; height: 5px; border-radius: 50%; opacity: 0;
+  box-shadow: 0 0 6px 2px rgba(255, 225, 140, .75); animation: fount 2.2s ease-out infinite; }
+.party .spark.once { animation-iteration-count: 1; animation-duration: 1.6s; }
+.party .ptag { position: relative; z-index: 1; display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 6px; font-weight: 700; font-size: .78rem; letter-spacing: .12em; color: #ffd8f3; }
+.party .hot { background: #e5216f; color: #fff; border-radius: 99px; padding: 2px 10px; letter-spacing: .02em; animation: hot 1.2s ease-in-out infinite; }
+.party .pdeal { position: relative; z-index: 1; margin-top: 8px; font-size: 1.15rem; color: #fff; }
+.party .pdeal b { color: #ffe08a; font-size: 1.3em; }
+.party .pdeal code { background: #fff; color: #22104a; border-radius: 6px; padding: 1px 8px; font-weight: 700; letter-spacing: .08em; border: 2px dashed #e5216f; }
+.party .pcode { position: relative; z-index: 1; display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+.party .pcode input { width: 11em; max-width: 50vw; border-radius: 8px; border: 1px solid #8a6bd1; background: rgba(255, 255, 255, .95); color: #22104a; padding: 7px 10px; font: inherit; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.party .pcode button { border: 0; border-radius: 8px; padding: 7px 14px; font-weight: 700; background: linear-gradient(180deg, #ffe08a, #e6a93a); color: #22104a; }
+.party .pcode.used { display: none; }
+.party .pmsg { position: relative; z-index: 1; margin-top: 6px; min-height: 1.2em; font-size: .92rem; color: #fff3c4; }
+.party .pmsg.ok { color: #9ff0bf; font-weight: 700; } .party .pmsg.err { color: #ffc2c2; }
+@keyframes hot { 50% { transform: scale(1.08); box-shadow: 0 0 12px rgba(229, 33, 111, .8); } }
+@keyframes glit { to { background-position: 200% center; } }
+@keyframes fount { 0% { transform: translate(0, 0) scale(1.1); opacity: 1; } 70% { opacity: .9; } 100% { transform: translate(var(--dx), var(--dy)) scale(.3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .party .glitter, .party .hot { animation: none; } .party .spark { display: none; } }
+.rabatt { white-space: nowrap; }
+.rabatt s { color: var(--muted); font-weight: 400; }
+.rabatt em { font-style: normal; font-size: .82em; font-weight: 700; color: #b0479a; }
+.bkopen { display: flex; flex-direction: column; gap: 6px; }
 footer { display: flex; justify-content: center; }
 /* Drucken: nur die Bestellliste des aktuellen Termins, schwarz auf weiß (Knopf „Drucken“ bei „Angemeldet“) */
 #printSheet { display: none; }
@@ -356,6 +388,22 @@ footer { display: flex; justify-content: center; }
         <div class="hist" id="tuList"></div>
       </div>
 
+      <div style="display:flex;flex-direction:column;gap:8px" id="bkBox">
+        <label>Bank <small class="muted" style="font-weight:400">Überweisungen aufs WWF-Konto, automatisch</small></label>
+        <p class="muted" id="bkStatus"></p>
+        <div class="row" id="bkBtns">
+          <button class="small" type="button" id="bkConnect">Bank verbinden</button>
+          <button class="small" type="button" id="bkRead">Jetzt abrufen</button>
+        </div>
+        <details class="sub" id="bkManual">
+          <summary>Freigabe von Hand übernehmen</summary>
+          <p class="muted">Nur falls die Seite die Freigabe nicht selbst übernommen hat: die Adresse einfügen, auf der du nach der Freigabe bei Revolut gelandet bist (innerhalb von 5 Minuten).</p>
+          <form id="bkForm" class="row"><input id="bkUrl" placeholder="https://…?code=…" aria-label="Adresse nach der Freigabe"><button class="small" type="submit">Übernehmen</button></form>
+        </details>
+        <p class="msg" id="bkMsg" aria-live="polite"></p>
+        <div id="bkOpen" class="bkopen"></div>
+      </div>
+
       <div style="display:flex;flex-direction:column;gap:8px">
         <label>Kasse</label>
         <div class="tiles" id="kaTiles"></div>
@@ -461,6 +509,13 @@ function isPinErr(e) { return /(^|\s)PIN\|/.test((e && e.message) || String(e));
 const eur = n => (Math.round(n * 100) / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 const fmt = (ms, o) => new Date(ms).toLocaleString('de-DE', Object.assign({ timeZone: TZ }, o));
 const dayFmt = d => { const p = d.split('-'); return p[2] + '.' + p[1] + '.'; };
+// Spendiertes WWF (SPONSORED in Code.gs): Kosten durchgestrichen, „100 % CMac-Rabatt“, am Ende 0,00 €.
+const sponsor = () => (S && S.event && S.event.sponsor) || null;
+function costEl(list, short) {
+  const sp = sponsor();
+  if (!sp) return document.createTextNode(eur(list || 0));
+  return el('span', { class: 'rabatt' }, list ? el('s', {}, eur(list)) : '', short ? ' ' : el('em', {}, ' 100 % ' + sp.by + '-Rabatt '), el('b', {}, eur(0)));
+}
 function el(tag, attrs, ...kids) {
   const n = document.createElement(tag);
   Object.entries(attrs || {}).forEach(([k, v]) => { if (k === 'class') n.className = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else if (v !== false && v != null) n.setAttribute(k, v === true ? '' : v); });
@@ -500,7 +555,10 @@ function renderPay() {
   const p = S.pay || {}, box = $('payBox');
   if (!p.iban) { box.replaceChildren(); return; }
   const me = mePerson();
-  const purpose = (p.purpose || 'WWF {Name}').replace('{Name}', me ? me.name : 'dein Name');
+  // Die WWF-Nummer kommt immer mit in den Verwendungszweck, damit die Bank-Zuordnung sicher klappt
+  // (steht in „Einstellungen“ kein {ID}, dann vor den Namen).
+  const tpl = p.purpose || 'WWF {Name}', id = me ? me.id : 'P…', nm = me ? me.name : 'dein Name';
+  const purpose = tpl.includes('{ID}') ? tpl.replace('{ID}', id).replace('{Name}', nm) : tpl.replace('{Name}', id + ' ' + nm);
   const field = (label, value, copy) => el('div', { class: 'f' }, el('span', {}, label),
     el('div', {}, el('code', {}, value), copy ? el('button', { class: 'small', type: 'button', onclick: () => copyText(value, label) }, 'Kopieren') : ''));
   box.replaceChildren(
@@ -510,7 +568,9 @@ function renderPay() {
     field('Verwendungszweck', purpose, !!me),
     me ? '' : el('p', { class: 'muted' }, 'Oben deinen Namen wählen, dann steht er hier im Verwendungszweck.'),
     qrBox(p, purpose, !!me),
-    p.link ? el('a', { class: 'primary', href: p.link, target: '_blank', rel: 'noopener' }, 'Mit Revolut zahlen') : '');
+    p.link ? el('a', { class: 'primary', href: p.link, target: '_blank', rel: 'noopener' }, 'Mit Revolut zahlen') : '',
+    S.bank && S.bank.auto ? el('p', { class: 'muted' }, 'Überweisungen werden automatisch gutgeschrieben, täglich um ' +
+      S.bank.auto.slice(0, -1).join(', ') + ' und ' + S.bank.auto.slice(-1)[0] + ' Uhr. Beim ersten Mal unbedingt mit diesem Verwendungszweck, danach erkennt die Seite dein Konto auch ohne.') : '');
 }
 // GiroCode (EPC-QR): Banking-Apps füllen damit Empfänger, IBAN, Betrag und Verwendungszweck aus.
 let qrAmount = '';
@@ -561,6 +621,10 @@ function renderEvent() {
   if (S.now >= e.start) { state = 'run'; line = 'Läuft gerade · Guten Appetit!'; }
   else if (e.locked) { state = 'locked'; line = 'Liste gesperrt · Einkaufsliste steht'; }
   else { state = 'open'; line = 'Eintragen bis ' + fmt(e.lock, { weekday: 'short', day: '2-digit', month: '2-digit' }) + ', ' + fmt(e.lock, { hour: '2-digit', minute: '2-digit' }) + ' Uhr'; }
+  if (e.sponsor) {   // dasselbe Band behalten (sonst wäre beim Neuladen der eingetippte Code weg)
+    if (!party || party.dataset.k !== e.key) { party = partyBand(e.sponsor); party.dataset.k = e.key; }
+    box.append(party);
+  }
   const status = el('div', { class: 'status' });
   status.insertAdjacentHTML('beforeend', LOCK_SVG.replace('class="lk"', 'class="ic"'));
   status.append(el('span', {}, line), state === 'open' ? el('b', {}, left(e.lock - S.now)) : '');
@@ -575,6 +639,53 @@ function renderEvent() {
       status,
       e.moved || e.note ? el('div', { class: 'muted' }, [e.moved ? 'Verschoben vom ' + dayFmt(e.key) + '.' : '', e.note].filter(Boolean).join(' ')) : ''),
     nextChips(e)));
+}
+// Band für ein spendiertes WWF im Black-Friday-Stil („CMAC WEEK“): Glitzerschrift, zwei Funkenfontänen und ein
+// Rabattcode-Feld. Der Code ist nur der Gag: der Rabatt gilt für alle schon von selbst, auch rückwirkend.
+// Nichts davon geht an den Server; gemerkt wird nur auf dem Gerät, dass der Code eingelöst ist.
+let party = null;
+function partyBand(sp) {
+  const code = (sp.code || sp.by).toUpperCase();
+  const msg = el('div', { class: 'pmsg', 'aria-live': 'polite' });
+  const inp = el('input', { placeholder: 'Rabattcode', 'aria-label': 'Rabattcode', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
+  const done = () => {
+    msg.className = 'pmsg ok';
+    msg.textContent = '✓ Code ' + code + ' eingelöst: 100 % Rabatt auf alles! (War bei allen schon automatisch aktiv, auch rückwirkend.)';
+    form.classList.add('used');
+  };
+  const form = el('form', { class: 'pcode' }, inp, el('button', { type: 'submit' }, 'Einlösen'));
+  form.addEventListener('submit', ev => {
+    ev.preventDefault();
+    if (inp.value.trim().toUpperCase() === code) { done(); burst(band); store('wwf-code-' + code, '1'); inp.blur(); }
+    else { msg.className = 'pmsg err'; msg.textContent = inp.value.trim() ? 'Dieser Code ist leider ungültig. Kleiner Tipp: ' + code + ' 😉' : 'Bitte einen Code eingeben. Kleiner Tipp: ' + code + ' 😉'; }
+  });
+  const band = el('div', { class: 'party', role: 'note' },
+    el('div', { class: 'ptag' }, el('span', {}, 'NUR AM ' + (S.event ? fmt(S.event.start, { day: '2-digit', month: '2-digit' }) : '')), el('span', { class: 'hot' }, '🔥 Bald ausverkauft!')),
+    el('div', { class: 'prow' }, el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎉'), el('span', { class: 'glitter' }, sp.week || sp.title), el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎂')),
+    el('div', { class: 'pline' }, sp.title + ': ' + sp.line + '!'),
+    el('div', { class: 'pdeal' }, 'Spare ', el('b', {}, '100 %'), ' mit dem Code ', el('code', {}, code)),
+    form, msg);
+  if (store('wwf-code-' + code) === '1') done();
+  const colors = ['#ffe08a', '#ffd23f', '#fff6d5', '#ff9de2', '#9ad8ff'];
+  ['10%', '90%'].forEach((x, side) => {
+    for (let i = 0; i < 16; i++) band.append(spark(x, (side ? -1 : 1) * (8 + Math.random() * 70) * (Math.random() < .25 ? -1 : 1), -60 - Math.random() * 90, Math.random() * 2, colors[i % colors.length], true));
+  });
+  return band;
+}
+function spark(x, dx, dy, delay, color, loop) {
+  const s = el('i', { class: 'spark' + (loop ? '' : ' once') });
+  s.style.cssText = `left:${x};--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;animation-delay:${delay.toFixed(2)}s;background:${color}`;
+  return s;
+}
+// Einmal Funken aus der Mitte, wenn der Code stimmt.
+function burst(band) {
+  const colors = ['#ffe08a', '#ff9de2', '#9ad8ff', '#fff', '#ffd23f'];
+  for (let i = 0; i < 40; i++) {
+    const a = Math.random() * Math.PI, r = 60 + Math.random() * 120;
+    const s = spark('50%', Math.cos(a) * r * 1.6, -Math.sin(a) * r, Math.random() * .3, colors[i % colors.length], false);
+    band.append(s);
+    setTimeout(() => s.remove(), 2600);
+  }
 }
 // Die folgenden Termine als kleine Labels im Termin-Block (ausgefallene rot und durchgestrichen).
 function nextChips(e) {
@@ -654,7 +765,7 @@ function renderItems() {
     const out = el('output', { 'aria-live': 'polite' }, n);
     const set = v => { draft[a.key] = Math.max(0, Math.min(20, v)); dirty = true; renderItems(); $('saveMsg').textContent = ''; };
     box.append(el('div', { class: 'item' + (n ? ' has' : '') },
-      el('div', { class: 'itxt' }, el('div', { class: 'nm' }, a.name), el('div', { class: 'pr' }, eur(a.price), icons(a.key, n))),
+      el('div', { class: 'itxt' }, el('div', { class: 'nm' }, a.name), el('div', { class: 'pr' }, sponsor() ? el('span', {}, el('s', {}, eur(a.price)), ' ', eur(0)) : eur(a.price), icons(a.key, n))),
       el('div', { class: 'step' },
         el('button', { type: 'button', 'aria-label': a.name + ' weniger', disabled: !can || !n, onclick: () => set(n - 1) }, '−'),
         out,
@@ -664,7 +775,7 @@ function renderItems() {
   const last = me.last;
   $('repeat').hidden = !can || !last;
   if (last) $('repeat').replaceChildren('↻ Wie letztes Mal (' + dayFmt(last.day) + ')', comboIcons(last.items));
-  $('orderSum').textContent = eur(draftCost());
+  $('orderSum').replaceChildren(costEl(draftCost()));
   $('save').disabled = !can || !dirty || busy;
   const has = S.articles.some(a => (me.items || {})[a.key] > 0);
   const saved = !!ME && !dirty && !busy && has && !requestMode();
@@ -701,6 +812,7 @@ $('repeat').addEventListener('click', () => {
   $('saveMsg').className = 'msg'; $('saveMsg').textContent = 'Wie am ' + dayFmt(last.day) + ' ausgefüllt. Noch nicht eingetragen: bitte „Eintragen“ tippen.';
 });
 const draftCost = () => S.articles.reduce((s, a) => s + (draft[a.key] || 0) * a.price, 0);
+const payCost = () => sponsor() ? 0 : draftCost();   // was wirklich abgezogen wird
 
 $('save').addEventListener('click', async () => {
   if (!ME || !S.event) return;
@@ -731,10 +843,11 @@ function renderMe() {
   const b = p.balance;
   box.append(el('div', {}, 'Kontostand: ', el('b', { class: b < 0 ? 'neg' : '' }, eur(b)), p.booked && p.cost ? el('span', { class: 'muted' }, ' (dieses WWF ist schon abgezogen)') : ''));
   if (S.event && !p.booked) {
-    const after = b - draftCost();
-    if (draftCost() > 0) box.append(el('div', {}, 'Nach diesem WWF: ', el('b', { class: after < 0 ? 'neg' : '' }, eur(after))));
+    const after = b - payCost();
+    if (draftCost() > 0) box.append(el('div', {}, 'Nach diesem WWF: ', el('b', { class: after < 0 ? 'neg' : '' }, eur(after)),
+      sponsor() ? el('span', { class: 'muted' }, ' 🎉 geht auf ' + sponsor().by) : ''));
   }
-  const low = b < 0 || (S.event && !p.booked && b - draftCost() < 0);
+  const low = b < 0 || (S.event && !p.booked && b - payCost() < 0);
   if (low) box.append(el('div', { class: 'neg' }, 'Bitte aufladen, siehe „Aufladen“.'));
 }
 $('histBtn').addEventListener('click', async () => {
@@ -754,15 +867,15 @@ function renderList() {
   const on = S.people.filter(p => S.articles.some(a => p.items[a.key]));
   $('cnt').textContent = on.length ? on.length + (on.length === 1 ? ' Person' : ' Personen') : '';
   $('shop').replaceChildren(...S.articles.filter(a => S.totals.items[a.key]).map(a => el('span', { class: 'chip' }, S.totals.items[a.key] + '× ' + a.name)),
-    S.totals.sum ? el('span', { class: 'chip' }, 'zusammen ' + eur(S.totals.sum)) : '');
+    S.totals.list ? el('span', { class: 'chip' }, 'zusammen ', costEl(S.totals.list, true)) : '');
   $('printBtn').hidden = !(S.event && on.length);
   const t = $('list');
   if (!on.length) { t.replaceChildren(el('tbody', {}, el('tr', {}, el('td', { class: 'muted' }, S.event ? 'Noch niemand eingetragen.' : '')))); return; }
   const arts = S.articles.filter(a => S.totals.items[a.key]);
   t.replaceChildren(
     el('thead', {}, el('tr', {}, el('th', {}, 'Name'), arts.map(a => el('th', {}, a.name)), el('th', {}, 'Kosten'))),
-    el('tbody', {}, on.map(p => el('tr', { class: p.id === ME ? 'me' : '' }, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', {}, eur(p.cost))))),
-    el('tfoot', {}, el('tr', {}, el('td', {}, 'Einkaufsliste'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', {}, eur(S.totals.sum)))));
+    el('tbody', {}, on.map(p => el('tr', { class: p.id === ME ? 'me' : '' }, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', {}, costEl(p.list))))),
+    el('tfoot', {}, el('tr', {}, el('td', {}, 'Einkaufsliste'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', {}, costEl(S.totals.list)))));
 }
 // Drucken: baut aus dem aktuellen Stand ein schlichtes Blatt (Termin, Tabelle mit Spalte zum Abhaken, Einkaufsliste)
 // und öffnet den Druckdialog. Auf dem Bildschirm bleibt #printSheet unsichtbar.
@@ -773,11 +886,12 @@ function buildPrint() {
     fmt(e.lock, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
   $('printSheet').replaceChildren(
     el('h1', {}, S.title + ' · ' + fmt(e.start, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + ', ' + fmt(e.start, { hour: '2-digit', minute: '2-digit' }) + ' Uhr'),
+    e.sponsor ? el('p', { class: 'sub' }, el('b', {}, '🎉 ' + e.sponsor.title + ': ' + e.sponsor.line + ', 100 % ' + e.sponsor.by + '-Rabatt auf alles')) : '',
     el('p', { class: 'sub' }, on.length + (on.length === 1 ? ' Person' : ' Personen') + ' · ' + status),
     el('table', {},
       el('thead', {}, el('tr', {}, el('th', {}, 'Name'), arts.map(a => el('th', {}, a.name)), el('th', {}, 'Kosten'), el('th', {}, '✓'))),
-      el('tbody', {}, on.map(p => el('tr', {}, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', { class: 'num' }, eur(p.cost)), el('td', { class: 'ok' }, '')))),
-      el('tfoot', {}, el('tr', {}, el('td', {}, 'Summe'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', { class: 'num' }, eur(S.totals.sum)), el('td', {}, '')))),
+      el('tbody', {}, on.map(p => el('tr', {}, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', { class: 'num' }, costEl(p.list)), el('td', { class: 'ok' }, '')))),
+      el('tfoot', {}, el('tr', {}, el('td', {}, 'Summe'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', { class: 'num' }, costEl(S.totals.list)), el('td', {}, '')))),
     el('p', { class: 'shop' }, el('b', {}, 'Einkaufsliste: '), arts.map(a => S.totals.items[a.key] + '× ' + a.name).join(' · ')));
 }
 $('printBtn').addEventListener('click', () => { buildPrint(); window.print(); });
@@ -873,7 +987,7 @@ function renderAdmin() {
   sel.replaceChildren(el('option', { value: '' }, '– Person –'), ...S.people.map(p => el('option', { value: p.id }, p.name)));
   sel.value = keep;
   $('tuList').replaceChildren(...(S.topups || []).map(t => el('div', {}, el('span', {}, t.day ? dayFmt(t.day) + t.day.slice(2, 4) : ''), el('span', {}, t.name + ' · ' + (t.via === 'konto' ? 'Überweisung' : 'bar') + (t.note ? ' · ' + t.note : '')), el('b', {}, eur(t.amount)))));
-  renderKasse(); renderEinkauf(); renderBillForm(); renderRequests();
+  renderKasse(); renderEinkauf(); renderBillForm(); renderRequests(); renderBank();
   $('evList').replaceChildren(...S.upcoming.map(u => {
     const date = el('input', { type: 'date', value: u.day, 'aria-label': 'Neues Datum für ' + dayFmt(u.key) });
     return el('div', { class: 'ev' },
@@ -896,6 +1010,75 @@ $('tuForm').addEventListener('submit', async e => {
   const ok = await adminCall('addTopup', [$('tuWho').value, $('tuAmount').value, $('tuNote').value, $('tuVia').value], 'tuMsg');
   if (ok) { $('tuAmount').value = ''; $('tuNote').value = ''; }
 });
+
+/* ---------- Bank (Verwaltung): automatische Gutschrift der Überweisungen ---------- */
+// Nach der Freigabe bei Revolut landet Franz wieder auf dieser Seite mit ?code=…: merken, Adresse säubern und,
+// sobald die Verwaltung geladen ist, selbst übernehmen (Revolut nennt die Konten nur ein paar Minuten lang).
+let bankBack = '';
+if (/[?&]code=/.test(location.search)) {
+  bankBack = location.href;
+  try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* egal */ }
+}
+const dtFmt = ms => fmt(ms, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+function renderBank() {
+  $('bkBox').hidden = !S.bank;   // ohne Bank.gs (vorerst aus) kein Bereich „Bank“
+  if (!S.bank) return;
+  const b = S.bank;
+  const st = [];
+  if (!b.ready) st.push('Noch nicht eingerichtet: In Apps Script fehlen die Skripteigenschaften EB_APP_ID, EB_KEY oder EB_REDIRECT.');
+  else if (!b.connected) st.push('Noch nicht mit der Bank verbunden.');
+  else {
+    const days = Math.floor((b.validUntil - S.now) / 864e5);
+    st.push(days < 0 ? 'Freigabe abgelaufen, bitte neu verbinden.' : 'Verbunden mit dem Konto …' + b.ibanEnd + ', Freigabe noch ' + days + ' Tage' + (days < 14 ? ', bald neu verbinden!' : '.'));
+    st.push(b.lastRead ? 'Letzter Abruf ' + dtFmt(b.lastRead) + (b.lastCounts ? ': ' + b.lastCounts.gebucht + ' gutgeschrieben, ' + b.lastCounts.offen + ' offen.' : '.') : 'Noch kein Abruf.');
+    if (b.auto) st.push('Automatisch täglich um ' + b.auto.join(', ') + ' Uhr; noch ' + Math.max(0, b.readsLeft) + ' automatische Abrufe in 24 Stunden frei.');
+  }
+  if (b.lastError) st.push('⚠ Letzter Fehler: ' + b.lastError);
+  $('bkStatus').replaceChildren(...st.flatMap((t, i) => i ? [el('br'), t] : [t]));
+  $('bkStatus').className = b.lastError ? 'msg err' : 'muted';
+  $('bkConnect').hidden = !b.ready; $('bkConnect').textContent = b.connected ? 'Neu verbinden' : 'Bank verbinden';
+  $('bkRead').hidden = !b.connected;
+  $('bkManual').hidden = !b.ready;
+  const open = b.open || [];
+  $('bkOpen').replaceChildren(open.length ? el('label', {}, 'Nicht zugeordnete Überweisungen (' + open.length + ')') : '',
+    ...open.map(o => {
+      const sel = el('select', { 'aria-label': 'Person für ' + eur(o.amount) }, el('option', { value: '' }, '– Person –'), ...S.people.map(p => el('option', { value: p.id }, p.name)));
+      sel.value = o.guess || '';
+      return el('div', { class: 'rq' },
+        el('span', {}, (o.day ? dayFmt(o.day) + ' · ' : ''), el('b', {}, eur(o.amount)), ' · ' + (o.who || 'Absender unbekannt') + (o.text ? ' · „' + o.text + '“' : '')),
+        el('span', { class: 'muted' }, o.why),
+        sel,
+        el('button', { class: 'small', type: 'button', onclick: () => { if (sel.value) adminCall('bankAssign', [o.row, sel.value], 'bkMsg'); else $('bkMsg').textContent = 'Bitte eine Person wählen.'; } }, 'Gutschreiben'),
+        el('button', { class: 'link danger', type: 'button', onclick: () => { if (confirm('Diese Überweisung verwerfen, also niemandem gutschreiben?')) adminCall('bankAssign', [o.row, ''], 'bkMsg'); } }, 'Verwerfen'));
+    }));
+  if (bankBack && b.ready) { const u = bankBack; bankBack = ''; bankTake(u); }
+}
+async function bankTake(u) {
+  const m = $('bkMsg'); m.className = 'msg'; m.textContent = 'Übernehme die Freigabe der Bank …';
+  try { apply(await call('bankSession', PIN, u)); m.className = 'msg ok'; m.textContent = 'Bank verbunden.'; }
+  catch (e) { m.className = 'msg err'; m.textContent = errText(e); }
+}
+$('bkConnect').addEventListener('click', async () => {
+  const m = $('bkMsg'); m.className = 'msg'; m.textContent = 'Frage die Bank …';
+  try {
+    const r = await call('bankConnect', PIN);
+    m.textContent = 'Weiter bei Revolut: das WWF-Konto auswählen und freigeben. Danach kommst du hierher zurück.';
+    location.href = r.url;
+  } catch (e) { m.className = 'msg err'; m.textContent = errText(e); }
+});
+$('bkRead').addEventListener('click', async () => {
+  const m = $('bkMsg'); m.className = 'msg'; m.textContent = 'Rufe die Bank ab …';
+  let ip = '';   // mit Franz' Adresse zählt der Abruf nicht zu den vier automatischen
+  try { ip = (await (await fetch('https://api.ipify.org?format=json')).json()).ip || ''; } catch (e) { ip = ''; }
+  try {
+    const s = await call('bankReadNow', PIN, ip);
+    apply(s);
+    const n = s.bankResult || {};
+    m.className = 'msg ok';
+    m.textContent = n.skipped ? 'Nicht abgerufen: ' + n.skipped + '.' : n.gelesen + ' Buchungen gelesen: ' + n.gebucht + ' gutgeschrieben, ' + n.offen + ' offen, ' + n.schon + ' schon bekannt.';
+  } catch (e) { m.className = 'msg err'; m.textContent = errText(e); }
+});
+$('bkForm').addEventListener('submit', e => { e.preventDefault(); bankTake($('bkUrl').value); });
 
 /* ---------- Anträge (Änderung oder Austragen nach der Sperre) ---------- */
 function renderRequests() {
