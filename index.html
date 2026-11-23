@@ -753,9 +753,9 @@ function nextBuyer(buyers) {
   }
   return null;
 }
-function toastEl(when) {
+function toastEl(when, plain) {   // plain: nur echte Bestellungen (beim ersten Füllen des Verlaufs)
   const buyers = S.people.filter(p => Object.keys(p.items || {}).some(k => p.items[k] > 0));
-  const jokes = (stackMode() && sponsor().jokes) || [];
+  const jokes = (!plain && stackMode() && sponsor().jokes) || [];
   let who, text;
   if (jokes.length && sinceJoke >= jokeGap) {
     const j = jokes[jokeCount++ % jokes.length]; who = j.who; text = j.text;
@@ -782,10 +782,11 @@ function buyToast() {
     setTimeout(() => t.remove(), 5000);
     return;
   }
-  if (!box) {   // gleich voll: 16 Meldungen, ältere weiter unten
+  if (!box) {   // gleich voll: 16 echte Bestellungen, ältere weiter unten; die Witze kommen erst mit den neuen dazu
     box = el('div', { id: 'toastStack', class: 'toaststack', 'aria-label': 'Gerade gekauft' }, el('div', { class: 'tshead' }, '🛒 Gerade gekauft'));
-    for (let i = 0, min = 1; i < 16; i++, min += 1 + Math.floor(Math.random() * 3)) { const t = toastEl('vor ' + min + ' Min.'); if (t) box.append(t); }
+    for (let i = 0, min = 1; i < 16; i++, min += 1 + Math.floor(Math.random() * 3)) { const t = toastEl('vor ' + min + ' Min.', true); if (t) box.append(t); }
     document.body.append(box);
+    sinceJoke = 0;   // der erste Witz als vierte neue Meldung
     return;
   }
   const t = toastEl('gerade eben');
