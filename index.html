@@ -513,12 +513,14 @@ const fmt = (ms, o) => new Date(ms).toLocaleString('de-DE', Object.assign({ time
 const dayFmt = d => { const p = d.split('-'); return p[2] + '.' + p[1] + '.'; };
 // Spendiertes WWF (SPONSORED in Code.gs): Kosten durchgestrichen, „100 % CMac-Rabatt“, am Ende 0,00 €.
 const sponsor = () => (S && S.event && S.event.sponsor) || null;
+// Hat die gewählte Person den Rabatt (schon eingetragen gewesen oder Code eingelöst)?
+const deal = () => !!sponsor() && !!mePerson() && !!mePerson().rabatt;
 // Rabatt gilt nicht (Alkoholfreies), außer für die Personen in allFree (Prof. Jossen)
-const excluded = key => !!sponsor() && (sponsor().excluded || []).includes(key) && !(sponsor().allFree || []).includes(ME);
-// list = Betrag ohne Spende, pay = was wirklich kostet (nur die ausgenommenen Artikel)
-function costEl(list, short, pay) {
+const excluded = key => deal() && (sponsor().excluded || []).includes(key) && !(sponsor().allFree || []).includes(ME);
+// list = Betrag ohne Spende, pay = was wirklich kostet, has = Rabatt aktiv
+function costEl(list, short, pay, has) {
   const sp = sponsor();
-  if (!sp) return document.createTextNode(eur(list || 0));
+  if (!sp || !has) return document.createTextNode(eur(sp ? (pay || 0) : (list || 0)));
   pay = pay || 0;
   return el('span', { class: 'rabatt' }, list > pay ? el('s', {}, eur(list)) : '', short ? ' ' : el('em', {}, ' 100 % ' + sp.by + '-Rabatt '), el('b', {}, eur(pay)));
 }
@@ -654,30 +656,44 @@ function partyBand(sp) {
   const code = (sp.code || sp.by).toUpperCase();
   const msg = el('div', { class: 'pmsg', 'aria-live': 'polite' });
   const inp = el('input', { placeholder: 'Rabattcode', 'aria-label': 'Rabattcode', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false' });
-  const done = () => {
-    msg.className = 'pmsg ok';
-    msg.textContent = '✓ Code ' + code + ' eingelöst: 100 % Rabatt auf alles! (War bei allen schon automatisch aktiv, auch rückwirkend.)';
-    form.classList.add('used');
-  };
-  const form = el('form', { class: 'pcode' }, inp, el('button', { type: 'submit' }, 'Einlösen'));
-  form.addEventListener('submit', ev => {
+  const btn = el('button', { type: 'submit' }, 'Einlösen');
+  const form = el('form', { class: 'pcode' }, inp, btn);
+  // Der Rabatt hängt an der gewählten Person: wer schon eingetragen war, hat ihn; alle anderen lösen den Code ein (Server).
+  form.addEventListener('submit', async ev => {
     ev.preventDefault();
-    if (inp.value.trim().toUpperCase() === code) { done(); burst(band); store('wwf-code-' + code, '1'); inp.blur(); }
-    else { msg.className = 'pmsg err'; msg.textContent = inp.value.trim() ? 'Dieser Code ist leider ungültig. Kleiner Tipp: ' + code + ' 😉' : 'Bitte einen Code eingeben. Kleiner Tipp: ' + code + ' 😉'; }
+    const err = t => { msg.className = 'pmsg err'; msg.textContent = t; };
+    if (!inp.value.trim()) return err('Bitte den Code eingeben.');
+    if (inp.value.trim().toUpperCase() !== code) return err('Dieser Code ist leider ungültig. Kleiner Tipp: ' + code + ' 😉');
+    if (!ME) return err('Bitte zuerst unten bei „Wer bist du?“ deinen Namen wählen, dann nochmal einlösen.');
+    btn.disabled = true; msg.className = 'pmsg'; msg.textContent = 'Löse ein …';
+    try {
+      apply(await call('redeemCode', PIN, ME, inp.value.trim()));
+      inp.value = ''; inp.blur(); burst(band);
+      msg.className = 'pmsg ok'; msg.textContent = '✓ Code ' + code + ' eingelöst: 100 % Rabatt auf deine Bestellung!';
+    } catch (e) { err(errText(e)); }
+    btn.disabled = false;
   });
+  // je nach gewählter Person: Feld zeigen oder „Rabatt aktiv“
+  const sync = () => {
+    const me = mePerson();
+    form.classList.toggle('used', !!(me && me.rabatt));
+    if (me && me.rabatt && !/eingelöst/.test(msg.textContent)) { msg.className = 'pmsg ok'; msg.textContent = '✓ Dein ' + sp.by + '-Rabatt ist aktiv: 100 % auf deine Bestellung.'; }
+    else if (!(me && me.rabatt) && msg.className === 'pmsg ok') { msg.className = 'pmsg'; msg.textContent = ''; }
+  };
   const band = el('div', { class: 'party', role: 'note' },
     el('div', { class: 'ptag' }, el('span', {}, 'NUR AM ' + (S.event ? fmt(S.event.start, { day: '2-digit', month: '2-digit' }) : '')), el('span', { class: 'hot' }, '🔥 Bald ausverkauft!')),
     el('div', { class: 'prow' }, el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎉'), el('span', { class: 'glitter' }, sp.week || sp.title), el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎂')),
     el('div', { class: 'pline' }, sp.title + ': ' + sp.line + '!'),
     el('div', { class: 'pdeal' }, 'Spare ', el('b', {}, '100 %'), ' mit dem Code ', el('code', {}, code)),
     form, msg);
-  if (store('wwf-code-' + code) === '1') done();
+  band._sync = sync;
   const colors = ['#ffe08a', '#ffd23f', '#fff6d5', '#ff9de2', '#9ad8ff'];
   ['10%', '90%'].forEach((x, side) => {
     for (let i = 0; i < 16; i++) band.append(spark(x, (side ? -1 : 1) * (8 + Math.random() * 70) * (Math.random() < .25 ? -1 : 1), -60 - Math.random() * 90, Math.random() * 2, colors[i % colors.length], true));
   });
   return band;
 }
+function syncParty() { if (party && party._sync && sponsor()) party._sync(); }
 function spark(x, dx, dy, delay, color, loop) {
   const s = el('i', { class: 'spark' + (loop ? '' : ' once') });
   s.style.cssText = `left:${x};--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;animation-delay:${delay.toFixed(2)}s;background:${color}`;
@@ -773,7 +789,7 @@ function renderItems() {
     const ex = excluded(a.key);   // am spendierten WWF: kostet normal, mit Hinweis sobald ausgewählt
     box.append(el('div', { class: 'item' + (n ? ' has' : '') },
       el('div', { class: 'itxt' }, el('div', { class: 'nm' }, a.name),
-        el('div', { class: 'pr' }, sponsor() && !ex ? el('span', {}, el('s', {}, eur(a.price)), ' ', eur(0)) : eur(a.price), icons(a.key, n)),
+        el('div', { class: 'pr' }, deal() && !ex ? el('span', {}, el('s', {}, eur(a.price)), ' ', eur(0)) : eur(a.price), icons(a.key, n)),
         ex && n ? el('div', { class: 'nocode' }, '✗ Der Code ' + (sponsor().code || sponsor().by) + ' ist leider für ' + a.name + ' nicht anwendbar.') : ''),
       el('div', { class: 'step' },
         el('button', { type: 'button', 'aria-label': a.name + ' weniger', disabled: !can || !n, onclick: () => set(n - 1) }, '−'),
@@ -784,7 +800,8 @@ function renderItems() {
   const last = me.last;
   $('repeat').hidden = !can || !last;
   if (last) $('repeat').replaceChildren('↻ Wie letztes Mal (' + dayFmt(last.day) + ')', comboIcons(last.items));
-  $('orderSum').replaceChildren(costEl(draftCost(), false, payCost()));
+  $('orderSum').replaceChildren(costEl(draftCost(), false, payCost(), deal()));
+  syncParty();
   $('save').disabled = !can || !dirty || busy;
   const has = S.articles.some(a => (me.items || {})[a.key] > 0);
   const saved = !!ME && !dirty && !busy && has && !requestMode();
@@ -821,7 +838,7 @@ $('repeat').addEventListener('click', () => {
   $('saveMsg').className = 'msg'; $('saveMsg').textContent = 'Wie am ' + dayFmt(last.day) + ' ausgefüllt. Noch nicht eingetragen: bitte „Eintragen“ tippen.';
 });
 const draftCost = () => S.articles.reduce((s, a) => s + (draft[a.key] || 0) * a.price, 0);
-const payCost = () => S.articles.reduce((s, a) => s + (!sponsor() || excluded(a.key) ? (draft[a.key] || 0) * a.price : 0), 0);   // was wirklich abgezogen wird
+const payCost = () => S.articles.reduce((s, a) => s + (!deal() || excluded(a.key) ? (draft[a.key] || 0) * a.price : 0), 0);   // was wirklich abgezogen wird
 
 $('save').addEventListener('click', async () => {
   if (!ME || !S.event) return;
@@ -854,7 +871,7 @@ function renderMe() {
   if (S.event && !p.booked) {
     const after = b - payCost();
     if (draftCost() > 0) box.append(el('div', {}, 'Nach diesem WWF: ', el('b', { class: after < 0 ? 'neg' : '' }, eur(after)),
-      sponsor() && !payCost() ? el('span', { class: 'muted' }, ' 🎉 geht auf ' + sponsor().by) : ''));
+      deal() && !payCost() ? el('span', { class: 'muted' }, ' 🎉 geht auf ' + sponsor().by) : ''));
   }
   const low = b < 0 || (S.event && !p.booked && b - payCost() < 0);
   if (low) box.append(el('div', { class: 'neg' }, 'Bitte aufladen, siehe „Aufladen“.'));
@@ -876,15 +893,15 @@ function renderList() {
   const on = S.people.filter(p => S.articles.some(a => p.items[a.key]));
   $('cnt').textContent = on.length ? on.length + (on.length === 1 ? ' Person' : ' Personen') : '';
   $('shop').replaceChildren(...S.articles.filter(a => S.totals.items[a.key]).map(a => el('span', { class: 'chip' }, S.totals.items[a.key] + '× ' + a.name)),
-    S.totals.list ? el('span', { class: 'chip' }, 'zusammen ', costEl(S.totals.list, true, S.totals.sum)) : '');
+    S.totals.list ? el('span', { class: 'chip' }, 'zusammen ', costEl(S.totals.list, true, S.totals.sum, S.totals.list > S.totals.sum)) : '');
   $('printBtn').hidden = !(S.event && on.length);
   const t = $('list');
   if (!on.length) { t.replaceChildren(el('tbody', {}, el('tr', {}, el('td', { class: 'muted' }, S.event ? 'Noch niemand eingetragen.' : '')))); return; }
   const arts = S.articles.filter(a => S.totals.items[a.key]);
   t.replaceChildren(
     el('thead', {}, el('tr', {}, el('th', {}, 'Name'), arts.map(a => el('th', {}, a.name)), el('th', {}, 'Kosten'))),
-    el('tbody', {}, on.map(p => el('tr', { class: p.id === ME ? 'me' : '' }, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', {}, costEl(p.list, false, p.cost))))),
-    el('tfoot', {}, el('tr', {}, el('td', {}, 'Einkaufsliste'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', {}, costEl(S.totals.list, false, S.totals.sum)))));
+    el('tbody', {}, on.map(p => el('tr', { class: p.id === ME ? 'me' : '' }, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', {}, costEl(p.list, false, p.cost, p.rabatt))))),
+    el('tfoot', {}, el('tr', {}, el('td', {}, 'Einkaufsliste'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', {}, costEl(S.totals.list, false, S.totals.sum, S.totals.list > S.totals.sum)))));
 }
 // Drucken: baut aus dem aktuellen Stand ein schlichtes Blatt (Termin, Tabelle mit Spalte zum Abhaken, Einkaufsliste)
 // und öffnet den Druckdialog. Auf dem Bildschirm bleibt #printSheet unsichtbar.
@@ -899,8 +916,8 @@ function buildPrint() {
     el('p', { class: 'sub' }, on.length + (on.length === 1 ? ' Person' : ' Personen') + ' · ' + status),
     el('table', {},
       el('thead', {}, el('tr', {}, el('th', {}, 'Name'), arts.map(a => el('th', {}, a.name)), el('th', {}, 'Kosten'), el('th', {}, '✓'))),
-      el('tbody', {}, on.map(p => el('tr', {}, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', { class: 'num' }, costEl(p.list, false, p.cost)), el('td', { class: 'ok' }, '')))),
-      el('tfoot', {}, el('tr', {}, el('td', {}, 'Summe'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', { class: 'num' }, costEl(S.totals.list, false, S.totals.sum)), el('td', {}, '')))),
+      el('tbody', {}, on.map(p => el('tr', {}, el('td', {}, p.name), arts.map(a => el('td', {}, p.items[a.key] || '')), el('td', { class: 'num' }, costEl(p.list, false, p.cost, p.rabatt)), el('td', { class: 'ok' }, '')))),
+      el('tfoot', {}, el('tr', {}, el('td', {}, 'Summe'), arts.map(a => el('td', {}, S.totals.items[a.key])), el('td', { class: 'num' }, costEl(S.totals.list, false, S.totals.sum, S.totals.list > S.totals.sum)), el('td', {}, '')))),
     el('p', { class: 'shop' }, el('b', {}, 'Einkaufsliste: '), arts.map(a => S.totals.items[a.key] + '× ' + a.name).join(' · ')));
 }
 $('printBtn').addEventListener('click', () => { buildPrint(); window.print(); });
