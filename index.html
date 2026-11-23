@@ -513,13 +513,14 @@ const fmt = (ms, o) => new Date(ms).toLocaleString('de-DE', Object.assign({ time
 const dayFmt = d => { const p = d.split('-'); return p[2] + '.' + p[1] + '.'; };
 // Spendiertes WWF (SPONSORED in Code.gs): Kosten durchgestrichen, „100 % CMac-Rabatt“, am Ende 0,00 €.
 const sponsor = () => (S && S.event && S.event.sponsor) || null;
-const excluded = key => !!sponsor() && (sponsor().excluded || []).includes(key);   // Rabatt gilt nicht (Alkoholfreies)
+// Rabatt gilt nicht (Alkoholfreies), außer für die Personen in allFree (Prof. Jossen)
+const excluded = key => !!sponsor() && (sponsor().excluded || []).includes(key) && !(sponsor().allFree || []).includes(ME);
 // list = Betrag ohne Spende, pay = was wirklich kostet (nur die ausgenommenen Artikel)
 function costEl(list, short, pay) {
   const sp = sponsor();
   if (!sp) return document.createTextNode(eur(list || 0));
   pay = pay || 0;
-  return el('span', { class: 'rabatt' }, list > pay ? el('s', {}, eur(list)) : '', short ? ' ' : el('em', {}, ' 100 % ' + sp.by + '-Rabatt' + (pay ? '*' : '') + ' '), el('b', {}, eur(pay)));
+  return el('span', { class: 'rabatt' }, list > pay ? el('s', {}, eur(list)) : '', short ? ' ' : el('em', {}, ' 100 % ' + sp.by + '-Rabatt '), el('b', {}, eur(pay)));
 }
 function el(tag, attrs, ...kids) {
   const n = document.createElement(tag);
@@ -668,9 +669,8 @@ function partyBand(sp) {
     el('div', { class: 'ptag' }, el('span', {}, 'NUR AM ' + (S.event ? fmt(S.event.start, { day: '2-digit', month: '2-digit' }) : '')), el('span', { class: 'hot' }, '🔥 Bald ausverkauft!')),
     el('div', { class: 'prow' }, el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎉'), el('span', { class: 'glitter' }, sp.week || sp.title), el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎂')),
     el('div', { class: 'pline' }, sp.title + ': ' + sp.line + '!'),
-    el('div', { class: 'pdeal' }, 'Spare ', el('b', {}, '100 %' + ((sp.excluded || []).length ? '*' : '')), ' mit dem Code ', el('code', {}, code)),
-    form, msg,
-    (sp.excluded || []).length ? el('div', { class: 'pfoot' }, '*Nicht anwendbar auf ' + sp.excluded.map(k => (S.articles.find(a => a.key === k) || { name: k }).name).join(', ') + '.') : '');
+    el('div', { class: 'pdeal' }, 'Spare ', el('b', {}, '100 %'), ' mit dem Code ', el('code', {}, code)),
+    form, msg);
   if (store('wwf-code-' + code) === '1') done();
   const colors = ['#ffe08a', '#ffd23f', '#fff6d5', '#ff9de2', '#9ad8ff'];
   ['10%', '90%'].forEach((x, side) => {
