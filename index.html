@@ -140,7 +140,10 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 3px s
 .combo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-left: 8px; vertical-align: middle; }
 .whohead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .newbtn { color: var(--blue); border-color: var(--blue); background: var(--blue-soft); font-weight: 600; }
-#repeat { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+#repeat, #comboBtn { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+#repeat[hidden], #comboBtn[hidden] { display: none; }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.small.house { background: var(--senf-soft); border-color: var(--senf); color: var(--senf); font-weight: 600; }
 .link.danger { color: var(--bad); align-self: center; }
 .req { margin: 0; border-radius: 10px; padding: 8px 12px; background: var(--senf-soft); color: var(--ink); font-size: .92rem; }
 .rq { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--senf); border-radius: 10px; background: var(--senf-soft); }
@@ -224,8 +227,6 @@ tr.inactive td { color: var(--muted); }
 .party .pcode.used { display: none; }
 .party .pmsg { position: relative; z-index: 1; margin-top: 6px; min-height: 1.2em; font-size: .92rem; color: #fff3c4; }
 .party .pmsg.ok { color: #9ff0bf; font-weight: 700; } .party .pmsg.err { color: #ffc2c2; }
-.party .pcombo { position: relative; z-index: 1; margin-top: 12px; border: 0; border-radius: 99px; padding: 9px 18px; font-weight: 700; font-size: 1rem;
-  background: linear-gradient(180deg, #fff, #ffe8a8); color: #22104a; box-shadow: 0 3px 12px rgba(255, 210, 90, .45); max-width: 100%; }
 .party .urgent { position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 12px -16px 0; padding: 7px 12px;
   background: linear-gradient(90deg, #ff3d00, #ff6a00, #ff3d00); color: #fff; font-weight: 800; font-size: .95rem; letter-spacing: .01em; animation: urg 1.4s ease-in-out infinite; }
 @keyframes urg { 50% { filter: brightness(1.18) saturate(1.2); } }
@@ -237,7 +238,15 @@ tr.inactive td { color: var(--muted); }
 .buytoast small { display: block; color: #5b6b82; margin-top: 2px; }
 .buytoast.out { opacity: 0; transform: translateY(12px); }
 @keyframes tin { from { opacity: 0; transform: translateY(16px); } }
-@media print { .buytoast { display: none !important; } }
+/* rechts im freien Rand neben der Seite (Seite 1108 px breit); ist der Rand zu schmal, unten rechts und nur zwei */
+.toaststack { position: fixed; right: 12px; top: 110px; z-index: 50; display: flex; flex-direction: column; gap: 10px;
+  width: clamp(200px, calc((100vw - 1108px) / 2 - 24px), 300px); max-height: calc(100vh - 130px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 0 6px 8px 2px; scrollbar-width: thin; }
+.toaststack .tshead { position: sticky; top: 0; z-index: 1; padding: 6px 4px; background: var(--bg); font-weight: 700; font-size: .85rem; color: var(--muted); }
+.toaststack .buytoast { position: static; max-width: none; flex: none; }
+@media (max-width: 1555px) { .toaststack { top: auto; bottom: 16px; right: 16px; width: min(300px, calc(100vw - 32px)); max-height: 210px;
+  background: var(--bg); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); padding: 0 8px 8px; } }
+@media print { .buytoast, .toaststack { display: none !important; } }
 @keyframes hot { 50% { transform: scale(1.08); box-shadow: 0 0 12px rgba(229, 33, 111, .8); } }
 @keyframes glit { to { background-position: 200% center; } }
 @keyframes fount { 0% { transform: translate(0, 0) scale(1.1); opacity: 1; } 70% { opacity: .9; } 100% { transform: translate(var(--dx), var(--dy)) scale(.3); opacity: 0; } }
@@ -337,7 +346,10 @@ footer { display: flex; justify-content: center; }
           <button class="small" type="submit">Anlegen</button>
         </form>
       </div>
-      <button class="small" id="repeat" type="button" hidden style="align-self:flex-start"></button>
+      <div class="quick">
+        <button class="small" id="repeat" type="button" hidden></button>
+        <button class="small house" id="comboBtn" type="button" hidden></button>
+      </div>
       <div class="items" id="items"></div>
       <div class="sum"><span>Summe</span><span id="orderSum">0,00 €</span></div>
       <button class="primary" id="save" type="button" disabled>Eintragen</button>
@@ -694,14 +706,6 @@ function partyBand(sp) {
     if (me && me.rabatt && !/eingelöst/.test(msg.textContent)) { msg.className = 'pmsg ok'; msg.textContent = '✓ Dein ' + sp.by + '-Rabatt ist aktiv: 100 % auf deine Bestellung.'; }
     else if (!(me && me.rabatt) && msg.className === 'pmsg ok') { msg.className = 'pmsg'; msg.textContent = ''; }
   };
-  // „Empfehlung des Hauses“: die 3-2-1-Kombi in den Warenkorb (nur ausfüllen); comboAf bekommt Alkoholfreies statt Weißbier
-  const comboItems = () => {
-    const c = Object.assign({}, sp.combo || {});
-    if ((sp.comboAf || []).includes(ME) && c.bier) { c.bier_af = c.bier; delete c.bier; }
-    return Object.keys(c).filter(k => S.articles.some(a => a.key === k)).map(k => [k, c[k]]);
-  };
-  const comboBtn = el('button', { type: 'button', class: 'pcombo' }, '');
-  comboBtn.addEventListener('click', () => addCombo(comboItems(), msg));
   // Drängel-Banner im Temu-Stil (nur Gag): knappe Weißwürste, Countdown bis zur Sperre, „Kollegen schauen gerade“
   const urgent = el('div', { class: 'urgent' }, el('span', { class: 'u1' }), el('span', { class: 'u2' }));
   const viewers = el('div', { class: 'viewers' });
@@ -710,9 +714,8 @@ function partyBand(sp) {
     el('div', { class: 'prow' }, el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎉'), el('span', { class: 'glitter' }, sp.week || sp.title), el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎂')),
     el('div', { class: 'pline' }, sp.title + ': ' + sp.line + '!'),
     el('div', { class: 'pdeal' }, 'Spare ', el('b', {}, '100 %'), ' mit dem Code ', el('code', {}, code)),
-    form, msg, comboBtn, urgent, viewers);
-  band._sync = () => { sync(); comboBtn.textContent = '⭐ Empfehlung des Hauses: ' + comboItems().map(([k, n]) => n + '× ' + artName(k)).join(' · '); comboBtn.hidden = !comboItems().length; };
-  band._msg = msg;
+    form, msg, urgent, viewers);
+  band._sync = sync;
   const colors = ['#ffe08a', '#ffd23f', '#fff6d5', '#ff9de2', '#9ad8ff'];
   ['10%', '90%'].forEach((x, side) => {
     for (let i = 0; i < 16; i++) band.append(spark(x, (side ? -1 : 1) * (8 + Math.random() * 70) * (Math.random() < .25 ? -1 : 1), -60 - Math.random() * 90, Math.random() * 2, colors[i % colors.length], true));
@@ -721,17 +724,6 @@ function partyBand(sp) {
 }
 function syncParty() { if (party && party._sync && sponsor()) party._sync(); }
 const artName = k => (S.articles.find(a => a.key === k) || { name: k }).name;
-// Kombi in den Warenkorb: setzt nur diese Artikel, „Eintragen“ tippt man selbst (wie „Wie letztes Mal“)
-function addCombo(items, msg) {
-  const err = t => { msg.className = 'pmsg err'; msg.textContent = t; };
-  if (!ME) return err('Bitte zuerst unten bei „Wer bist du?“ deinen Namen wählen, dann nochmal tippen.');
-  if (!editable()) return err('Für dieses WWF lässt sich nichts mehr ändern.');
-  items.forEach(([k, n]) => { draft[k] = n; });
-  dirty = true; renderItems(); renderMe();
-  $('saveMsg').className = 'msg ok';
-  $('saveMsg').textContent = '⭐ Die Empfehlung des Hauses liegt im Warenkorb. Jetzt noch auf „' + $('save').textContent.replace(/\s*✓$/, '') + '“ tippen.';
-  try { $('items').scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* egal */ }
-}
 // Jede Sekunde: Weißwürste „knapp“, Countdown bis zur Sperre; ab und zu „Kollegen schauen“ und ein Kauf-Hinweis unten links.
 let partyTicks = 0;
 const hms = ms => { const s = Math.max(0, Math.floor(ms / 1000)), d = Math.floor(s / 86400);
@@ -743,20 +735,53 @@ setInterval(() => {
   const left = S.event.lock - Date.now();
   party.querySelector('.u2').textContent = left > 0 ? '⏰ Angebot endet in ' + hms(left) : '⏰ Angebot abgelaufen, CMac zahlt trotzdem 😉';
   if (partyTicks % 15 === 0) party.querySelector('.viewers').textContent = '👀 ' + (5 + Math.floor(Math.random() * 10)) + ' Kollegen sehen sich dieses Angebot gerade an';
-  if (partyTicks % 13 === 6) buyToast();
+  if (stackMode() ? (partyTicks % 6 === 2 || !document.getElementById('toastStack')) : partyTicks % 13 === 6) buyToast();
   partyTicks++;
 }, 1000);
-function buyToast() {
+// Ruhige Version (einzeln unten links) für calmFor (Prof. Jossen) und solange kein Name gewählt ist;
+// sonst rechts neben der Seite ein scrollbarer Verlauf: beim Öffnen schon gefüllt, neue Meldungen kommen oben dazu,
+// und jede vierte ist ein Witz (jokes, der Reihe nach), dazwischen immer drei normale Bestellungen.
+const stackMode = () => !!ME && !!sponsor() && !(sponsor().calmFor || []).includes(ME);
+let toastCount = 0, jokeCount = 0;
+function toastEl(when) {
   const buyers = S.people.filter(p => Object.keys(p.items || {}).some(k => p.items[k] > 0));
-  if (!buyers.length || document.hidden) return;
-  const p = buyers[Math.floor(Math.random() * buyers.length)];
-  const ks = Object.keys(p.items).filter(k => p.items[k] > 0), k = ks[Math.floor(Math.random() * ks.length)];
-  const nm = p.name.includes(',') ? p.name.split(',')[1].trim() + ' ' + p.name.split(',')[0].trim().charAt(0) + '.' : p.name;
-  const t = el('div', { class: 'buytoast', role: 'status' }, el('b', {}, '🛒 ' + nm), ' hat sich gerade ' + p.items[k] + '× ' + artName(k) + ' gesichert',
-    el('small', {}, 'vor ' + (1 + Math.floor(Math.random() * 9)) + ' Min. · CMAC WEEK'));
-  document.body.append(t);
-  setTimeout(() => t.classList.add('out'), 4200);
-  setTimeout(() => t.remove(), 5000);
+  const jokes = (stackMode() && sponsor().jokes) || [];
+  let who, text;
+  if (jokes.length && toastCount % 4 === 2) { const j = jokes[jokeCount++ % jokes.length]; who = j.who; text = j.text; }
+  else {
+    if (!buyers.length) return null;
+    const p = buyers[Math.floor(Math.random() * buyers.length)];
+    const ks = Object.keys(p.items).filter(k => p.items[k] > 0), k = ks[Math.floor(Math.random() * ks.length)];
+    who = p.name.includes(',') ? p.name.split(',')[1].trim() + ' ' + p.name.split(',')[0].trim().charAt(0) + '.' : p.name;
+    text = 'hat sich gerade ' + p.items[k] + '× ' + artName(k) + ' gesichert';
+  }
+  toastCount++;
+  return el('div', { class: 'buytoast', role: 'status' }, el('b', {}, '🛒 ' + who), ' ' + text, el('small', {}, when + ' · CMAC WEEK'));
+}
+function buyToast() {
+  if (document.hidden) return;
+  let box = document.getElementById('toastStack');
+  if (!stackMode()) {
+    if (box) box.remove();
+    const t = toastEl('vor ' + (1 + Math.floor(Math.random() * 9)) + ' Min.');
+    if (!t) return;
+    document.body.append(t);
+    setTimeout(() => t.classList.add('out'), 4200);
+    setTimeout(() => t.remove(), 5000);
+    return;
+  }
+  if (!box) {   // gleich voll: 16 Meldungen, ältere weiter unten; topJoke ganz oben angepinnt
+    box = el('div', { id: 'toastStack', class: 'toaststack', 'aria-label': 'Gerade gekauft' }, el('div', { class: 'tshead' }, '🛒 Gerade gekauft'));
+    const top = sponsor().topJoke;
+    if (top) box.append(el('div', { class: 'buytoast pinned', role: 'status' }, el('b', {}, '🛒 ' + top.who), ' ' + top.text, el('small', {}, 'gerade eben · CMAC WEEK')));
+    for (let i = 0, min = 1; i < 16; i++, min += 1 + Math.floor(Math.random() * 3)) { const t = toastEl('vor ' + min + ' Min.'); if (t) box.append(t); }
+    document.body.append(box);
+    return;
+  }
+  const t = toastEl('gerade eben');
+  if (!t) return;
+  (box.querySelector('.pinned') || box.firstElementChild).after(t);   // neueste oben, unter der Überschrift (und unter dem angepinnten)
+  while (box.children.length > 41) box.lastElementChild.remove();
 }
 function spark(x, dx, dy, delay, color, loop) {
   const s = el('i', { class: 'spark' + (loop ? '' : ' once') });
@@ -864,6 +889,10 @@ function renderItems() {
   const last = me.last;
   $('repeat').hidden = !can || !last;
   if (last) $('repeat').replaceChildren('↻ Wie letztes Mal (' + dayFmt(last.day) + ')', comboIcons(last.items));
+  const house = comboItems();
+  $('comboBtn').hidden = !can || !house.length;
+  $('comboBtn').replaceChildren('⭐ Empfehlung des Hauses', comboIcons(Object.fromEntries(house)));
+  $('comboBtn').title = house.map(([k, n]) => n + '× ' + artName(k)).join(', ');
   $('orderSum').replaceChildren(costEl(draftCost(), false, payCost(), deal()));
   syncParty();
   $('save').disabled = !can || !dirty || busy;
@@ -891,6 +920,19 @@ $('leave').addEventListener('click', async () => {
   clearTimeout(quitArmed); quitArmed = 0;
   draft = {}; dirty = true;
   $('save').click();
+});
+// „Empfehlung des Hauses“ (COMBO in Code.gs): 3 Weißwürste, 2 Brezn, 1 Weißbier; Prof. Jossen Alkoholfreies statt Weißbier.
+function comboItems() {
+  const cb = (S && S.combo) || {}, c = Object.assign({}, cb.items || {});
+  if ((cb.af || []).includes(ME) && c.bier) { c.bier_af = c.bier; delete c.bier; }
+  return S.articles.filter(a => c[a.key]).map(a => [a.key, c[a.key]]);
+}
+// Setzt nur diese Artikel, speichert nicht: erst „Eintragen“ schickt es ab (wie „Wie letztes Mal“).
+$('comboBtn').addEventListener('click', () => {
+  comboItems().forEach(([k, n]) => { draft[k] = n; });
+  dirty = true; renderItems(); renderMe();
+  $('saveMsg').className = 'msg ok';
+  $('saveMsg').textContent = '⭐ Die Empfehlung des Hauses liegt im Warenkorb. Noch nicht eingetragen: bitte „Eintragen“ tippen.';
 });
 // Füllt nur aus, speichert nicht: erst „Eintragen“ schickt es ab.
 $('repeat').addEventListener('click', () => {
