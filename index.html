@@ -224,10 +224,24 @@ tr.inactive td { color: var(--muted); }
 .party .pcode.used { display: none; }
 .party .pmsg { position: relative; z-index: 1; margin-top: 6px; min-height: 1.2em; font-size: .92rem; color: #fff3c4; }
 .party .pmsg.ok { color: #9ff0bf; font-weight: 700; } .party .pmsg.err { color: #ffc2c2; }
+.party .pcombo { position: relative; z-index: 1; margin-top: 12px; border: 0; border-radius: 99px; padding: 9px 18px; font-weight: 700; font-size: 1rem;
+  background: linear-gradient(180deg, #fff, #ffe8a8); color: #22104a; box-shadow: 0 3px 12px rgba(255, 210, 90, .45); max-width: 100%; }
+.party .urgent { position: relative; z-index: 1; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin: 12px -16px 0; padding: 7px 12px;
+  background: linear-gradient(90deg, #ff3d00, #ff6a00, #ff3d00); color: #fff; font-weight: 800; font-size: .95rem; letter-spacing: .01em; animation: urg 1.4s ease-in-out infinite; }
+@keyframes urg { 50% { filter: brightness(1.18) saturate(1.2); } }
+.party .u2 { font-variant-numeric: tabular-nums; background: rgba(0, 0, 0, .22); border-radius: 6px; padding: 0 8px; }
+.party .viewers { position: relative; z-index: 1; margin-top: 8px; font-size: .85rem; color: #ffd8f3; min-height: 1.2em; }
+.buytoast { position: fixed; left: 16px; bottom: 16px; z-index: 50; max-width: min(330px, calc(100vw - 32px)); background: #fff; color: #15233a;
+  border-left: 5px solid #ff3d00; border-radius: 12px; padding: 10px 14px; box-shadow: 0 8px 24px rgba(0, 0, 0, .22); font-size: .92rem;
+  animation: tin .35s ease-out; transition: opacity .6s, transform .6s; }
+.buytoast small { display: block; color: #5b6b82; margin-top: 2px; }
+.buytoast.out { opacity: 0; transform: translateY(12px); }
+@keyframes tin { from { opacity: 0; transform: translateY(16px); } }
+@media print { .buytoast { display: none !important; } }
 @keyframes hot { 50% { transform: scale(1.08); box-shadow: 0 0 12px rgba(229, 33, 111, .8); } }
 @keyframes glit { to { background-position: 200% center; } }
 @keyframes fount { 0% { transform: translate(0, 0) scale(1.1); opacity: 1; } 70% { opacity: .9; } 100% { transform: translate(var(--dx), var(--dy)) scale(.3); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .party .glitter, .party .hot { animation: none; } .party .spark { display: none; } }
+@media (prefers-reduced-motion: reduce) { .party .glitter, .party .hot, .party .urgent { animation: none; } .party .spark { display: none; } }
 .item .nocode { display: inline-block; margin-top: 4px; font-size: .82rem; font-weight: 700; color: #fff; background: #d0193f; border-radius: 6px; padding: 2px 8px; }
 .party .pfoot { position: relative; z-index: 1; margin-top: 4px; font-size: .75rem; color: #cbb8ef; }
 .rabatt { white-space: nowrap; }
@@ -680,13 +694,25 @@ function partyBand(sp) {
     if (me && me.rabatt && !/eingelöst/.test(msg.textContent)) { msg.className = 'pmsg ok'; msg.textContent = '✓ Dein ' + sp.by + '-Rabatt ist aktiv: 100 % auf deine Bestellung.'; }
     else if (!(me && me.rabatt) && msg.className === 'pmsg ok') { msg.className = 'pmsg'; msg.textContent = ''; }
   };
+  // „Empfehlung des Hauses“: die 3-2-1-Kombi in den Warenkorb (nur ausfüllen); comboAf bekommt Alkoholfreies statt Weißbier
+  const comboItems = () => {
+    const c = Object.assign({}, sp.combo || {});
+    if ((sp.comboAf || []).includes(ME) && c.bier) { c.bier_af = c.bier; delete c.bier; }
+    return Object.keys(c).filter(k => S.articles.some(a => a.key === k)).map(k => [k, c[k]]);
+  };
+  const comboBtn = el('button', { type: 'button', class: 'pcombo' }, '');
+  comboBtn.addEventListener('click', () => addCombo(comboItems(), msg));
+  // Drängel-Banner im Temu-Stil (nur Gag): knappe Weißwürste, Countdown bis zur Sperre, „Kollegen schauen gerade“
+  const urgent = el('div', { class: 'urgent' }, el('span', { class: 'u1' }), el('span', { class: 'u2' }));
+  const viewers = el('div', { class: 'viewers' });
   const band = el('div', { class: 'party', role: 'note' },
     el('div', { class: 'ptag' }, el('span', {}, 'NUR AM ' + (S.event ? fmt(S.event.start, { day: '2-digit', month: '2-digit' }) : '')), el('span', { class: 'hot' }, '🔥 Bald ausverkauft!')),
     el('div', { class: 'prow' }, el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎉'), el('span', { class: 'glitter' }, sp.week || sp.title), el('span', { class: 'emo', 'aria-hidden': 'true' }, '🎂')),
     el('div', { class: 'pline' }, sp.title + ': ' + sp.line + '!'),
     el('div', { class: 'pdeal' }, 'Spare ', el('b', {}, '100 %'), ' mit dem Code ', el('code', {}, code)),
-    form, msg);
-  band._sync = sync;
+    form, msg, comboBtn, urgent, viewers);
+  band._sync = () => { sync(); comboBtn.textContent = '⭐ Empfehlung des Hauses: ' + comboItems().map(([k, n]) => n + '× ' + artName(k)).join(' · '); comboBtn.hidden = !comboItems().length; };
+  band._msg = msg;
   const colors = ['#ffe08a', '#ffd23f', '#fff6d5', '#ff9de2', '#9ad8ff'];
   ['10%', '90%'].forEach((x, side) => {
     for (let i = 0; i < 16; i++) band.append(spark(x, (side ? -1 : 1) * (8 + Math.random() * 70) * (Math.random() < .25 ? -1 : 1), -60 - Math.random() * 90, Math.random() * 2, colors[i % colors.length], true));
@@ -694,6 +720,44 @@ function partyBand(sp) {
   return band;
 }
 function syncParty() { if (party && party._sync && sponsor()) party._sync(); }
+const artName = k => (S.articles.find(a => a.key === k) || { name: k }).name;
+// Kombi in den Warenkorb: setzt nur diese Artikel, „Eintragen“ tippt man selbst (wie „Wie letztes Mal“)
+function addCombo(items, msg) {
+  const err = t => { msg.className = 'pmsg err'; msg.textContent = t; };
+  if (!ME) return err('Bitte zuerst unten bei „Wer bist du?“ deinen Namen wählen, dann nochmal tippen.');
+  if (!editable()) return err('Für dieses WWF lässt sich nichts mehr ändern.');
+  items.forEach(([k, n]) => { draft[k] = n; });
+  dirty = true; renderItems(); renderMe();
+  $('saveMsg').className = 'msg ok';
+  $('saveMsg').textContent = '⭐ Die Empfehlung des Hauses liegt im Warenkorb. Jetzt noch auf „' + $('save').textContent.replace(/\s*✓$/, '') + '“ tippen.';
+  try { $('items').scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* egal */ }
+}
+// Jede Sekunde: Weißwürste „knapp“, Countdown bis zur Sperre; ab und zu „Kollegen schauen“ und ein Kauf-Hinweis unten links.
+let partyTicks = 0;
+const hms = ms => { const s = Math.max(0, Math.floor(ms / 1000)), d = Math.floor(s / 86400);
+  return (d ? d + ' T ' : '') + [Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60, s % 60].map(x => String(x).padStart(2, '0')).join(':'); };
+setInterval(() => {
+  if (!party || !party.isConnected || !sponsor() || !S.event) return;
+  const ww = ((S.totals || {}).items || {}).ww || 0;
+  party.querySelector('.u1').textContent = '⚡ JETZT ZUSCHLAGEN: Nur noch ' + Math.max(3, 12 - Math.floor(ww / 5)) + ' Weißwürste verfügbar!';
+  const left = S.event.lock - Date.now();
+  party.querySelector('.u2').textContent = left > 0 ? '⏰ Angebot endet in ' + hms(left) : '⏰ Angebot abgelaufen, CMac zahlt trotzdem 😉';
+  if (partyTicks % 15 === 0) party.querySelector('.viewers').textContent = '👀 ' + (5 + Math.floor(Math.random() * 10)) + ' Kollegen sehen sich dieses Angebot gerade an';
+  if (partyTicks % 13 === 6) buyToast();
+  partyTicks++;
+}, 1000);
+function buyToast() {
+  const buyers = S.people.filter(p => Object.keys(p.items || {}).some(k => p.items[k] > 0));
+  if (!buyers.length || document.hidden) return;
+  const p = buyers[Math.floor(Math.random() * buyers.length)];
+  const ks = Object.keys(p.items).filter(k => p.items[k] > 0), k = ks[Math.floor(Math.random() * ks.length)];
+  const nm = p.name.includes(',') ? p.name.split(',')[1].trim() + ' ' + p.name.split(',')[0].trim().charAt(0) + '.' : p.name;
+  const t = el('div', { class: 'buytoast', role: 'status' }, el('b', {}, '🛒 ' + nm), ' hat sich gerade ' + p.items[k] + '× ' + artName(k) + ' gesichert',
+    el('small', {}, 'vor ' + (1 + Math.floor(Math.random() * 9)) + ' Min. · CMAC WEEK'));
+  document.body.append(t);
+  setTimeout(() => t.classList.add('out'), 4200);
+  setTimeout(() => t.remove(), 5000);
+}
 function spark(x, dx, dy, delay, color, loop) {
   const s = el('i', { class: 'spark' + (loop ? '' : ' once') });
   s.style.cssText = `left:${x};--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;animation-delay:${delay.toFixed(2)}s;background:${color}`;
