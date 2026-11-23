@@ -740,22 +740,34 @@ setInterval(() => {
 }, 1000);
 // Ruhige Version (einzeln unten links) für calmFor (Prof. Jossen) und solange kein Name gewählt ist;
 // sonst rechts neben der Seite ein scrollbarer Verlauf: beim Öffnen schon gefüllt, neue Meldungen kommen oben dazu,
-// und jede vierte ist ein Witz (jokes, der Reihe nach), dazwischen immer drei normale Bestellungen.
+// und jede vierte Meldung ist ein Witz (jokes, der Reihe nach), damit im sichtbaren Teil immer einer steht (Franz 23.11.).
+// Die normalen gehen reihum durch alle Angemeldeten (gemischt, jeder einmal, dann von vorn), damit nicht ständig dieselben kommen.
 const stackMode = () => !!ME && !!sponsor() && !(sponsor().calmFor || []).includes(ME);
-let toastCount = 0, jokeCount = 0;
+let jokeCount = 0, sinceJoke = 2, buyerQueue = [];
+const jokeGap = 3;
+function nextBuyer(buyers) {
+  for (let tries = 0; tries < 2; tries++) {
+    while (buyerQueue.length) { const id = buyerQueue.pop(), p = buyers.find(b => b.id === id); if (p) return p; }
+    buyerQueue = buyers.map(b => b.id);   // neue Runde, gemischt
+    for (let i = buyerQueue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [buyerQueue[i], buyerQueue[j]] = [buyerQueue[j], buyerQueue[i]]; }
+  }
+  return null;
+}
 function toastEl(when) {
   const buyers = S.people.filter(p => Object.keys(p.items || {}).some(k => p.items[k] > 0));
   const jokes = (stackMode() && sponsor().jokes) || [];
   let who, text;
-  if (jokes.length && toastCount % 4 === 2) { const j = jokes[jokeCount++ % jokes.length]; who = j.who; text = j.text; }
-  else {
-    if (!buyers.length) return null;
-    const p = buyers[Math.floor(Math.random() * buyers.length)];
+  if (jokes.length && sinceJoke >= jokeGap) {
+    const j = jokes[jokeCount++ % jokes.length]; who = j.who; text = j.text;
+    sinceJoke = 0;   // nächster Witz nach jokeGap normalen
+  } else {
+    const p = nextBuyer(buyers);
+    if (!p) return null;
     const ks = Object.keys(p.items).filter(k => p.items[k] > 0), k = ks[Math.floor(Math.random() * ks.length)];
     who = p.name.includes(',') ? p.name.split(',')[1].trim() + ' ' + p.name.split(',')[0].trim().charAt(0) + '.' : p.name;
     text = 'hat sich gerade ' + p.items[k] + '× ' + artName(k) + ' gesichert';
+    sinceJoke++;
   }
-  toastCount++;
   return el('div', { class: 'buytoast', role: 'status' }, el('b', {}, '🛒 ' + who), ' ' + text, el('small', {}, when + ' · CMAC WEEK'));
 }
 function buyToast() {
@@ -770,17 +782,15 @@ function buyToast() {
     setTimeout(() => t.remove(), 5000);
     return;
   }
-  if (!box) {   // gleich voll: 16 Meldungen, ältere weiter unten; topJoke ganz oben angepinnt
+  if (!box) {   // gleich voll: 16 Meldungen, ältere weiter unten
     box = el('div', { id: 'toastStack', class: 'toaststack', 'aria-label': 'Gerade gekauft' }, el('div', { class: 'tshead' }, '🛒 Gerade gekauft'));
-    const top = sponsor().topJoke;
-    if (top) box.append(el('div', { class: 'buytoast pinned', role: 'status' }, el('b', {}, '🛒 ' + top.who), ' ' + top.text, el('small', {}, 'gerade eben · CMAC WEEK')));
     for (let i = 0, min = 1; i < 16; i++, min += 1 + Math.floor(Math.random() * 3)) { const t = toastEl('vor ' + min + ' Min.'); if (t) box.append(t); }
     document.body.append(box);
     return;
   }
   const t = toastEl('gerade eben');
   if (!t) return;
-  (box.querySelector('.pinned') || box.firstElementChild).after(t);   // neueste oben, unter der Überschrift (und unter dem angepinnten)
+  box.firstElementChild.after(t);   // neueste oben, unter der Überschrift
   while (box.children.length > 41) box.lastElementChild.remove();
 }
 function spark(x, dx, dy, delay, color, loop) {
